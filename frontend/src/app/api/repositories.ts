@@ -1,0 +1,170 @@
+﻿import type { LoginRequest, LoginResponse, RefreshResponse, AuthUser } from "../types/auth";
+import type { Patient, Protocol, Template } from "../types/models";
+import { env } from "../lib/env";
+import { http } from "./http";
+import {
+  loginResponseSchema,
+  patientSchema,
+  patientsSchema,
+  protocolSchema,
+  protocolsSchema,
+  refreshResponseSchema,
+  templateSchema,
+  templatesSchema,
+  authUserSchema,
+} from "./schemas";
+import { mockDb } from "./mockDb";
+
+export const api = {
+  listPatients: async (): Promise<Patient[]> => {
+    if (env.useMockApi) {
+      return mockDb.listPatients();
+    }
+
+    const response = await http.get("/patients");
+    return patientsSchema.parse(response.data);
+  },
+  createPatient: async (payload: Omit<Patient, "id">): Promise<Patient> => {
+    if (env.useMockApi) {
+      return mockDb.createPatient(payload);
+    }
+
+    const response = await http.post("/patients", payload);
+    return patientSchema.parse(response.data);
+  },
+  updatePatient: async (id: string, payload: Partial<Patient>): Promise<Patient> => {
+    if (env.useMockApi) {
+      return patientSchema.parse({ id, ...payload });
+    }
+
+    const response = await http.patch(`/patients/${id}`, payload);
+    return patientSchema.parse(response.data);
+  },
+  deletePatient: async (id: string): Promise<void> => {
+    if (env.useMockApi) {
+      return;
+    }
+
+    await http.delete(`/patients/${id}`);
+  },
+  listTemplates: async (): Promise<Template[]> => {
+    if (env.useMockApi) {
+      return mockDb.listTemplates();
+    }
+
+    const response = await http.get("/templates");
+    return templatesSchema.parse(response.data);
+  },
+  createTemplate: async (
+    payload: Omit<Template, "id" | "createdAt">
+  ): Promise<Template> => {
+    if (env.useMockApi) {
+      return mockDb.createTemplate(payload);
+    }
+
+    const response = await http.post("/templates", payload);
+    return templateSchema.parse(response.data);
+  },
+  updateTemplate: async (id: string, payload: Partial<Template>): Promise<Template> => {
+    if (env.useMockApi) {
+      return templateSchema.parse({
+        id,
+        name: payload.name ?? "",
+        modality: payload.modality ?? "CT",
+        content: payload.content ?? "",
+        createdAt: payload.createdAt ?? new Date().toISOString(),
+      });
+    }
+
+    const response = await http.patch(`/templates/${id}`, payload);
+    return templateSchema.parse(response.data);
+  },
+  deleteTemplate: async (id: string): Promise<void> => {
+    if (env.useMockApi) {
+      return mockDb.deleteTemplate(id);
+    }
+
+    await http.delete(`/templates/${id}`);
+  },
+  listProtocols: async (): Promise<Protocol[]> => {
+    if (env.useMockApi) {
+      return mockDb.listProtocols();
+    }
+
+    const response = await http.get("/protocols");
+    return protocolsSchema.parse(response.data) as Protocol[];
+  },
+  getProtocol: async (id: string): Promise<Protocol | null> => {
+    if (env.useMockApi) {
+      return mockDb.getProtocol(id);
+    }
+
+    const response = await http.get(`/protocols/${id}`);
+    return protocolSchema.parse(response.data) as Protocol;
+  },
+  createProtocol: async (
+    payload: Omit<Protocol, "id" | "createdAt" | "updatedAt" | "status">
+  ): Promise<Protocol> => {
+    if (env.useMockApi) {
+      return mockDb.createProtocol(payload);
+    }
+
+    const response = await http.post("/protocols", payload);
+    return protocolSchema.parse(response.data) as Protocol;
+  },
+  updateProtocol: async (id: string, payload: Partial<Protocol>): Promise<Protocol> => {
+    if (env.useMockApi) {
+      return mockDb.updateProtocol(id, payload);
+    }
+
+    const response = await http.patch(`/protocols/${id}`, payload);
+    return protocolSchema.parse(response.data) as Protocol;
+  },
+  deleteProtocol: async (id: string): Promise<void> => {
+    if (env.useMockApi) {
+      return;
+    }
+
+    await http.delete(`/protocols/${id}`);
+  },
+  login: async (payload: LoginRequest): Promise<LoginResponse> => {
+    if (env.useMockApi) {
+      return mockDb.login(payload);
+    }
+
+    const response = await http.post("/auth/login", payload);
+    return loginResponseSchema.parse(response.data);
+  },
+  refresh: async (): Promise<RefreshResponse> => {
+    if (env.useMockApi) {
+      return mockDb.refresh();
+    }
+
+    const response = await http.post("/auth/refresh");
+    return refreshResponseSchema.parse(response.data);
+  },
+  me: async (): Promise<AuthUser> => {
+    if (env.useMockApi) {
+      return mockDb.me();
+    }
+
+    const response = await http.get("/me");
+    return authUserSchema.parse(response.data);
+  },
+  verify2Fa: async (code: string): Promise<{ ok: boolean }> => {
+    if (env.useMockApi) {
+      return { ok: code.trim().length > 0 };
+    }
+
+    const response = await http.post("/auth/2fa/verify", { code });
+    return response.data as { ok: boolean };
+  },
+  logout: async (): Promise<void> => {
+    if (env.useMockApi) {
+      return mockDb.logout();
+    }
+
+    await http.post("/auth/logout");
+  },
+};
+

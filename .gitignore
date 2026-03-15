@@ -1,0 +1,23 @@
+﻿# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Go
+backend/bin/
+ai-gateway/bin/
+
+# Env
+.env
+*.local
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+

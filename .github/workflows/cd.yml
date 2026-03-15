@@ -1,0 +1,38 @@
+﻿name: CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - stage
+          - prod
+  push:
+    branches:
+      - develop
+
+jobs:
+  deploy-dev:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and deploy to dev
+        run: |
+          echo "TODO: connect registry + deploy target"
+          echo "Auto deploy to dev placeholder"
+
+  deploy-manual:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Manual deployment
+        run: |
+          echo "Manual approval/environment gates handled by GitHub environments"
+          echo "Deploying to ${{ inputs.environment }}"

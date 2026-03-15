@@ -1,0 +1,78 @@
+﻿name: CI
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run design:check
+      - run: npm run typecheck
+      - run: npm run test:unit
+      - run: npm run build
+      - name: Security scan (npm audit)
+        run: npm audit --audit-level=high
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - run: go mod tidy
+      - run: go test ./...
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: govulncheck ./...
+
+  ai-gateway:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - run: go mod tidy
+      - run: go test ./...
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: govulncheck ./...
+
+  design-contract-guard:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prevent design contract changes without override
+        run: |
+          if [ "${ALLOW_DESIGN_CHANGE:-false}" = "true" ]; then
+            echo "ALLOW_DESIGN_CHANGE=true, skipping restricted file guard"
+            exit 0
+          fi
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^frontend/src/styles/theme.css|^frontend/src/app/components/ui/'; then
+            echo "Design contract files changed. Approval required (set ALLOW_DESIGN_CHANGE=true)."
+            exit 1
+          fi
+          echo "No restricted design contract changes detected"
+
+
