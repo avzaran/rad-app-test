@@ -1,42 +1,42 @@
-﻿package provider
+package provider
 
-import (
-	"context"
-	"fmt"
-	"strings"
-	"time"
-)
+import "context"
 
+// Message represents a chat message with a role.
+type Message struct {
+	Role    string `json:"role"`    // "system" | "user" | "assistant"
+	Content string `json:"content"`
+}
+
+// Request is the input to a Provider.
 type Request struct {
-	Prompt      string  `json:"prompt"`
-	Temperature float64 `json:"temperature"`
+	Messages    []Message `json:"messages"`
+	Temperature float64   `json:"temperature"`
+	MaxTokens   int       `json:"maxTokens"`
 }
 
+// Response is the synchronous output of a Provider.
 type Response struct {
-	Output string `json:"output"`
+	Output       string `json:"output"`
+	TokensUsed   int    `json:"tokensUsed"`
+	FinishReason string `json:"finishReason"` // "stop" | "length"
 }
 
+// StreamChunk is a single piece of a streaming response.
+type StreamChunk struct {
+	Delta      string `json:"delta"`
+	Done       bool   `json:"done"`
+	TokensUsed int    `json:"tokensUsed,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+// Provider generates a complete response.
 type Provider interface {
-	Generate(ctx context.Context, request Request) (Response, error)
+	Generate(ctx context.Context, req Request) (Response, error)
 }
 
-type MockProvider struct{}
-
-func NewMockProvider() *MockProvider {
-	return &MockProvider{}
-}
-
-func (p *MockProvider) Generate(ctx context.Context, request Request) (Response, error) {
-	select {
-	case <-ctx.Done():
-		return Response{}, ctx.Err()
-	case <-time.After(80 * time.Millisecond):
-	}
-
-	normalized := strings.TrimSpace(request.Prompt)
-	if normalized == "" {
-		normalized = "без запроса"
-	}
-
-	return Response{Output: fmt.Sprintf("[MOCK] Ответ для: %s", normalized)}, nil
+// StreamProvider extends Provider with streaming support.
+type StreamProvider interface {
+	Provider
+	GenerateStream(ctx context.Context, req Request) (<-chan StreamChunk, error)
 }

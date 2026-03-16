@@ -8,6 +8,7 @@
     environment:
       - VITE_API_BASE_URL=http://localhost:8080
       - VITE_USE_MOCK_API=false
+      - VITE_AI_ENABLED=true
     depends_on:
       - backend
 
@@ -23,6 +24,7 @@
       - STORAGE_BASE_URL=http://minio:9000
       - STORAGE_BUCKET_NAME=radassist-files
       - RATE_LIMIT_PER_MIN=300
+      - AI_GATEWAY_URL=http://ai-gateway:8090
     depends_on:
       - postgres
       - minio
@@ -33,6 +35,12 @@
       dockerfile: Dockerfile
     ports:
       - "8090:8090"
+    environment:
+      - PORT=8090
+      - PROVIDER_MODE=${PROVIDER_MODE:-mock}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.openai.com}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o}
 
   postgres:
     image: postgres:17-alpine

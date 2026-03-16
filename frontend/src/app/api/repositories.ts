@@ -1,5 +1,6 @@
 ﻿import type { LoginRequest, LoginResponse, RefreshResponse, AuthUser } from "../types/auth";
 import type { Patient, Protocol, Template } from "../types/models";
+import type { AIGenerateRequest, AIGenerateResponse, AIStreamChunk } from "../types/ai";
 import { env } from "../lib/env";
 import { http } from "./http";
 import {
@@ -165,6 +166,79 @@ export const api = {
     }
 
     await http.post("/auth/logout");
+  },
+
+  // -- AI --
+
+  generateAI: async (req: AIGenerateRequest): Promise<AIGenerateResponse> => {
+    if (env.useMockApi) {
+      await new Promise((r) => setTimeout(r, 500));
+      return {
+        text: `[MOCK] Сгенерированный текст для ${req.section} (${req.modality})`,
+        tokensUsed: 42,
+      };
+    }
+
+    const response = await http.post("/ai/generate", req);
+    return response.data as AIGenerateResponse;
+  },
+
+  streamAI: async (
+    req: AIGenerateRequest,
+    onChunk: (chunk: AIStreamChunk) => void,
+    signal?: AbortSignal,
+  ): Promise<void> => {
+    if (env.useMockApi) {
+      const mockText =
+        "ТЕХНИКА ИССЛЕДОВАНИЯ:\nИсследование выполнено по стандартному протоколу.\n\nОПИСАНИЕ:\nБез патологических изменений.\n\nЗАКЛЮЧЕНИЕ:\nНорма.";
+      const words = mockText.split(" ");
+      for (let i = 0; i < words.length; i++) {
+        if (signal?.aborted) return;
+        await new Promise((r) => setTimeout(r, 50));
+        onChunk({ delta: words[i] + " ", done: false });
+      }
+      onChunk({ delta: "", done: true, tokensUsed: words.length * 2 });
+      return;
+    }
+
+    const response = await fetch(`${env.apiBaseUrl}/ai/generate/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+      signal,
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI stream failed: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No response body");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const chunk = JSON.parse(line.slice(6)) as AIStreamChunk;
+            onChunk(chunk);
+            if (chunk.done) return;
+          } catch {
+            // skip malformed chunks
+          }
+        }
+      }
+    }
   },
 };
 

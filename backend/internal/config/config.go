@@ -10,6 +10,7 @@ type Config struct {
 	RateLimitPerMin   int
 	StorageBaseURL    string
 	StorageBucketName string
+	AIGatewayURL      string
 }
 
 func Load() Config {
@@ -20,6 +21,7 @@ func Load() Config {
 	viper.SetDefault("RATE_LIMIT_PER_MIN", 240)
 	viper.SetDefault("STORAGE_BASE_URL", "http://localhost:9000")
 	viper.SetDefault("STORAGE_BUCKET_NAME", "radassist-files")
+	viper.SetDefault("AI_GATEWAY_URL", "http://localhost:8090")
 
 	viper.AutomaticEnv()
 
@@ -31,5 +33,6 @@ func Load() Config {
 		RateLimitPerMin:   viper.GetInt("RATE_LIMIT_PER_MIN"),
 		StorageBaseURL:    viper.GetString("STORAGE_BASE_URL"),
 		StorageBucketName: viper.GetString("STORAGE_BUCKET_NAME"),
+		AIGatewayURL:      viper.GetString("AI_GATEWAY_URL"),
 	}
 }
