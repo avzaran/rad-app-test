@@ -144,12 +144,12 @@ func (s *Service) GenerateStream(ctx context.Context, userID string, req Generat
 			if json.Unmarshal([]byte(dataStr), &chunk) == nil && chunk.TokensUsed > 0 {
 				totalTokens = chunk.TokensUsed
 			}
-		}
 
-		fmt.Fprintf(w, "%s\n", line)
-		if strings.HasPrefix(line, "data: ") || line == "" {
+			// Write full SSE event atomically with double newline
+			fmt.Fprintf(w, "%s\n\n", line)
 			flusher.Flush()
 		}
+		// Skip blank separator lines — they were part of the upstream SSE framing
 	}
 
 	if totalTokens > 0 {

@@ -112,8 +112,8 @@ func (s *Server) inferenceStream(c *gin.Context) {
 		return
 	}
 
-	s.config.CircuitBreaker.Success()
 	s.writeSSE(c, ch)
+	s.config.CircuitBreaker.Success()
 }
 
 // streamFallback calls Generate() and sends the result as a single SSE chunk.

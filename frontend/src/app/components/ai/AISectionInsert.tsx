@@ -11,7 +11,8 @@ type Section = {
 /** Parse protocol text into named sections. */
 export function parseSections(text: string): Section[] {
   const sections: Section[] = [];
-  const lines = text.split("\n");
+  const normalized = text.replace(/\r\n/g, "\n");
+  const lines = normalized.split("\n");
   let currentSection: Section | null = null;
   let charIndex = 0;
 
@@ -41,7 +42,8 @@ export function parseSections(text: string): Section[] {
 
 /** Replace the content of a specific section, keeping other sections intact. */
 export function replaceSection(fullText: string, sectionName: SectionName, newContent: string): string {
-  const sections = parseSections(fullText);
+  const normalizedText = fullText.replace(/\r\n/g, "\n");
+  const sections = parseSections(normalizedText);
   const target = sections.find((s) => s.name === sectionName);
 
   if (!target) {
@@ -49,7 +51,7 @@ export function replaceSection(fullText: string, sectionName: SectionName, newCo
     return fullText + `\n\n${sectionName}:\n${newContent}`;
   }
 
-  const before = fullText.slice(0, target.startIndex);
-  const after = fullText.slice(target.endIndex);
+  const before = normalizedText.slice(0, target.startIndex);
+  const after = normalizedText.slice(target.endIndex);
   return before + `${sectionName}:\n${newContent}` + after;
 }

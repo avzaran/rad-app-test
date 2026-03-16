@@ -2,7 +2,7 @@
 import type { Patient, Protocol, Template } from "../types/models";
 import type { AIGenerateRequest, AIGenerateResponse, AIStreamChunk } from "../types/ai";
 import { env } from "../lib/env";
-import { http } from "./http";
+import { http, getAccessToken } from "./http";
 import {
   loginResponseSchema,
   patientSchema,
@@ -201,9 +201,13 @@ export const api = {
       return;
     }
 
+    const token = getAccessToken();
     const response = await fetch(`${env.apiBaseUrl}/ai/generate/stream`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(req),
       signal,
       credentials: "include",
@@ -221,7 +225,19 @@ export const api = {
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        // Flush remaining buffer content
+        const remaining = buffer + decoder.decode();
+        if (remaining.startsWith("data: ")) {
+          try {
+            const chunk = JSON.parse(remaining.slice(6)) as AIStreamChunk;
+            onChunk(chunk);
+          } catch {
+            // skip malformed chunk
+          }
+        }
+        break;
+      }
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");

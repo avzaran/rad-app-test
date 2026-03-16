@@ -17,7 +17,7 @@ type Config struct {
 
 func Load() Config {
 	viper.SetDefault("PORT", "8090")
-	viper.SetDefault("REQUEST_TIMEOUT_MS", 5000)
+	viper.SetDefault("REQUEST_TIMEOUT_MS", 30000)
 	viper.SetDefault("RETRY_COUNT", 2)
 	viper.SetDefault("RETRY_BACKOFF_MS", 250)
 	viper.SetDefault("CIRCUIT_THRESHOLD", 5)

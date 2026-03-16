@@ -57,3 +57,7 @@ export function configureHttpAuth(nextConfig: AuthConfig): void {
   config.refreshAccessToken = nextConfig.refreshAccessToken;
 }
 
+export function getAccessToken(): string | null {
+  return config.getAccessToken();
+}
+

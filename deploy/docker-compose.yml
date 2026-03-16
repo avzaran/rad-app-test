@@ -28,6 +28,7 @@
     depends_on:
       - postgres
       - minio
+      - ai-gateway
 
   ai-gateway:
     build:
