@@ -1,5 +1,5 @@
 ﻿import type { LoginRequest, LoginResponse, RefreshResponse, AuthUser } from "../types/auth";
-import type { Patient, Protocol, Template } from "../types/models";
+import type { Patient, Protocol, Template, UploadedTemplate } from "../types/models";
 import type { AIGenerateRequest, AIGenerateResponse, AIStreamChunk } from "../types/ai";
 import { env } from "../lib/env";
 import { http, getAccessToken } from "./http";
@@ -12,6 +12,8 @@ import {
   refreshResponseSchema,
   templateSchema,
   templatesSchema,
+  uploadedTemplateSchema,
+  uploadedTemplatesSchema,
   authUserSchema,
 } from "./schemas";
 import { mockDb } from "./mockDb";
@@ -168,6 +170,75 @@ export const api = {
     await http.post("/auth/logout");
   },
 
+  // -- Uploaded Templates --
+
+  uploadTemplate: async (file: File, modality: string): Promise<UploadedTemplate> => {
+    if (env.useMockApi) {
+      return mockDb.uploadTemplate(file, modality as import("../types/models").Modality);
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("modality", modality);
+
+    const response = await http.post("/uploaded-templates/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return uploadedTemplateSchema.parse(response.data);
+  },
+
+  uploadTemplatesBatch: async (files: File[], modality: string): Promise<UploadedTemplate[]> => {
+    if (env.useMockApi) {
+      return mockDb.uploadTemplatesBatch(files, modality as import("../types/models").Modality);
+    }
+
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append("files", file);
+    }
+    formData.append("modality", modality);
+
+    const response = await http.post("/uploaded-templates/upload-batch", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return uploadedTemplatesSchema.parse(response.data);
+  },
+
+  listUploadedTemplates: async (): Promise<UploadedTemplate[]> => {
+    if (env.useMockApi) {
+      return mockDb.listUploadedTemplates();
+    }
+
+    const response = await http.get("/uploaded-templates");
+    return uploadedTemplatesSchema.parse(response.data);
+  },
+
+  deleteUploadedTemplate: async (id: string): Promise<void> => {
+    if (env.useMockApi) {
+      return mockDb.deleteUploadedTemplate(id);
+    }
+
+    await http.delete(`/uploaded-templates/${id}`);
+  },
+
+  getUploadedTemplate: async (id: string): Promise<UploadedTemplate> => {
+    if (env.useMockApi) {
+      return mockDb.getUploadedTemplate(id);
+    }
+
+    const response = await http.get(`/uploaded-templates/${id}`);
+    return uploadedTemplateSchema.parse(response.data);
+  },
+
+  getUploadedTemplatesByModality: async (modality: string): Promise<UploadedTemplate[]> => {
+    if (env.useMockApi) {
+      return mockDb.getUploadedTemplatesByModality(modality);
+    }
+
+    const response = await http.get(`/uploaded-templates/by-modality/${modality}`);
+    return uploadedTemplatesSchema.parse(response.data);
+  },
+
   // -- AI --
 
   generateAI: async (req: AIGenerateRequest): Promise<AIGenerateResponse> => {
@@ -188,7 +259,8 @@ export const api = {
     onChunk: (chunk: AIStreamChunk) => void,
     signal?: AbortSignal,
   ): Promise<void> => {
-    if (env.useMockApi) {
+    // Autocomplete always uses real AI, even in mock mode
+    if (env.useMockApi && req.section !== "autocomplete") {
       const mockText =
         "ТЕХНИКА ИССЛЕДОВАНИЯ:\nИсследование выполнено по стандартному протоколу.\n\nОПИСАНИЕ:\nБез патологических изменений.\n\nЗАКЛЮЧЕНИЕ:\nНорма.";
       const words = mockText.split(" ");

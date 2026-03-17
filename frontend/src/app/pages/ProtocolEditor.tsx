@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Save, CheckCircle2, Sparkles } from "lucide-react";
+import { Save, CheckCircle2, Sparkles, X, FileText } from "lucide-react";
 import { useProtocolQuery, useUpdateProtocolMutation } from "../hooks/useProtocols";
 import { useProtocolTabsStore } from "../store/protocolTabsStore";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { Textarea } from "../components/ui/textarea";
 import { AIAssistantPanel } from "../components/ai/AIAssistantPanel";
+import { AutocompleteTextarea } from "../components/ai/AutocompleteTextarea";
 import { replaceSection, type SectionName } from "../components/ai/AISectionInsert";
 import { env } from "../lib/env";
 import { toast } from "sonner";
@@ -21,6 +21,8 @@ export function ProtocolEditor() {
 
   const [content, setContent] = useState("");
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [templateHintDismissed, setTemplateHintDismissed] = useState(false);
+  const templateHintShownRef = useRef(false);
 
   useEffect(() => {
     if (protocol) {
@@ -121,11 +123,35 @@ export function ProtocolEditor() {
         </div>
 
         <Card className="p-6">
-          <Textarea
+          {aiPanelOpen &&
+            env.aiEnabled &&
+            !templateHintDismissed &&
+            !templateHintShownRef.current && (
+              <div className="mb-3 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+                <FileText className="h-4 w-4 shrink-0 text-primary" />
+                <p className="flex-1 text-xs text-primary">
+                  AI может предложить текст на основе загруженных шаблонов
+                </p>
+                <button
+                  type="button"
+                  className="shrink-0 rounded p-0.5 text-primary/60 transition-colors hover:text-primary"
+                  onClick={() => {
+                    setTemplateHintDismissed(true);
+                    templateHintShownRef.current = true;
+                  }}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          <AutocompleteTextarea
             value={content}
-            onChange={(event) => setContent(event.target.value)}
+            onChange={(e) => setContent(e.target.value)}
             rows={20}
-            className="font-mono text-sm"
+            modality={protocol.modality}
+            templateContent={protocol.template?.content ?? ""}
+            protocolId={protocol.id}
+            autocompleteEnabled={env.aiEnabled && !aiPanelOpen}
           />
         </Card>
       </div>

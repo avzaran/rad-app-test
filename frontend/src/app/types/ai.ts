@@ -1,6 +1,6 @@
 import type { Modality } from "./models";
 
-export type AISection = "description" | "conclusion" | "full" | "question";
+export type AISection = "description" | "conclusion" | "full" | "question" | "autocomplete";
 
 export type AIGenerateRequest = {
   modality: Modality;
@@ -9,6 +9,7 @@ export type AIGenerateRequest = {
   currentContent: string;
   userMessage?: string;
   protocolId: string;
+  uploadedTemplateIds?: string[];
 };
 
 export type AIGenerateResponse = {
