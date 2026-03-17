@@ -15,10 +15,13 @@ import (
 )
 
 // Service proxies AI requests through the AI Gateway.
+const gatewayAuthHeader = "X-AI-Gateway-Secret"
+
 type Service struct {
-	gatewayURL string
-	httpClient *http.Client
-	audit      repository.AuditRepository
+	gatewayURL          string
+	gatewaySharedSecret string
+	httpClient          *http.Client
+	audit               repository.AuditRepository
 }
 
 // GenerateRequest is the input from the frontend.
@@ -53,14 +56,15 @@ type gatewayResponse struct {
 	FinishReason string `json:"finishReason"`
 }
 
-func NewService(gatewayURL string, httpClient *http.Client, audit repository.AuditRepository) *Service {
+func NewService(gatewayURL, gatewaySharedSecret string, httpClient *http.Client, audit repository.AuditRepository) *Service {
 	if httpClient == nil {
 		httpClient = &http.Client{}
 	}
 	return &Service{
-		gatewayURL: strings.TrimRight(gatewayURL, "/"),
-		httpClient: httpClient,
-		audit:      audit,
+		gatewayURL:          strings.TrimRight(gatewayURL, "/"),
+		gatewaySharedSecret: gatewaySharedSecret,
+		httpClient:          httpClient,
+		audit:               audit,
 	}
 }
 
@@ -78,6 +82,9 @@ func (s *Service) Generate(ctx context.Context, userID string, req GenerateReque
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if s.gatewaySharedSecret != "" {
+		httpReq.Header.Set(gatewayAuthHeader, s.gatewaySharedSecret)
+	}
 
 	resp, err := s.httpClient.Do(httpReq)
 	if err != nil {
@@ -118,6 +125,9 @@ func (s *Service) GenerateStream(ctx context.Context, userID string, req Generat
 		return 0, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if s.gatewaySharedSecret != "" {
+		httpReq.Header.Set(gatewayAuthHeader, s.gatewaySharedSecret)
+	}
 
 	resp, err := s.httpClient.Do(httpReq)
 	if err != nil {

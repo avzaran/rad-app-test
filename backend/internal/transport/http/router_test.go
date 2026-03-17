@@ -38,7 +38,7 @@ func testRouter() http.Handler {
 	repos := memory.NewRepositories()
 	authService := auth.NewService(repos, cfg.JWTSecret, 15*time.Minute, 48*time.Hour)
 	dataService := data.NewService(repos)
-	aiService := ai.NewService(cfg.AIGatewayURL, &http.Client{Timeout: time.Second}, repos.Audit)
+	aiService := ai.NewService(cfg.AIGatewayURL, "", &http.Client{Timeout: time.Second}, repos.Audit)
 
 	logger := zap.NewNop()
 	return NewRouter(cfg, authService, dataService, aiService, logger)

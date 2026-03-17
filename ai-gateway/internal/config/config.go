@@ -3,13 +3,14 @@ package config
 import "github.com/spf13/viper"
 
 type Config struct {
-	Port             string
-	RequestTimeoutMs int
-	RetryCount       int
-	RetryBackoffMs   int
-	CircuitThreshold int
-	CircuitCooldownS int
-	ProviderMode     string
+	Port                 string
+	RequestTimeoutMs     int
+	RetryCount           int
+	RetryBackoffMs       int
+	CircuitThreshold     int
+	CircuitCooldownS     int
+	ProviderMode         string
+	InternalSharedSecret string
 
 	// OpenAI
 	LLMBaseURL         string
@@ -36,6 +37,7 @@ func Load() Config {
 	viper.SetDefault("CIRCUIT_THRESHOLD", 5)
 	viper.SetDefault("CIRCUIT_COOLDOWN_S", 30)
 	viper.SetDefault("PROVIDER_MODE", "mock")
+	viper.SetDefault("AI_GATEWAY_SHARED_SECRET", "")
 
 	// OpenAI defaults
 	viper.SetDefault("LLM_BASE_URL", "https://api.openai.com")
@@ -56,22 +58,23 @@ func Load() Config {
 	viper.AutomaticEnv()
 
 	return Config{
-		Port:             viper.GetString("PORT"),
-		RequestTimeoutMs: viper.GetInt("REQUEST_TIMEOUT_MS"),
-		RetryCount:       viper.GetInt("RETRY_COUNT"),
-		RetryBackoffMs:   viper.GetInt("RETRY_BACKOFF_MS"),
-		CircuitThreshold: viper.GetInt("CIRCUIT_THRESHOLD"),
-		CircuitCooldownS: viper.GetInt("CIRCUIT_COOLDOWN_S"),
-		ProviderMode:     viper.GetString("PROVIDER_MODE"),
-		LLMBaseURL:         viper.GetString("LLM_BASE_URL"),
-		LLMAPIKey:          viper.GetString("LLM_API_KEY"),
-		LLMModel:           viper.GetString("LLM_MODEL"),
-		LLMCompletionsPath: viper.GetString("LLM_COMPLETIONS_PATH"),
-		DeepSeekBaseURL:  viper.GetString("DEEPSEEK_BASE_URL"),
-		DeepSeekAPIKey:   viper.GetString("DEEPSEEK_API_KEY"),
-		DeepSeekModel:    viper.GetString("DEEPSEEK_MODEL"),
-		GeminiBaseURL:    viper.GetString("GEMINI_BASE_URL"),
-		GeminiAPIKey:     viper.GetString("GEMINI_API_KEY"),
-		GeminiModel:      viper.GetString("GEMINI_MODEL"),
+		Port:                 viper.GetString("PORT"),
+		RequestTimeoutMs:     viper.GetInt("REQUEST_TIMEOUT_MS"),
+		RetryCount:           viper.GetInt("RETRY_COUNT"),
+		RetryBackoffMs:       viper.GetInt("RETRY_BACKOFF_MS"),
+		CircuitThreshold:     viper.GetInt("CIRCUIT_THRESHOLD"),
+		CircuitCooldownS:     viper.GetInt("CIRCUIT_COOLDOWN_S"),
+		ProviderMode:         viper.GetString("PROVIDER_MODE"),
+		InternalSharedSecret: viper.GetString("AI_GATEWAY_SHARED_SECRET"),
+		LLMBaseURL:           viper.GetString("LLM_BASE_URL"),
+		LLMAPIKey:            viper.GetString("LLM_API_KEY"),
+		LLMModel:             viper.GetString("LLM_MODEL"),
+		LLMCompletionsPath:   viper.GetString("LLM_COMPLETIONS_PATH"),
+		DeepSeekBaseURL:      viper.GetString("DEEPSEEK_BASE_URL"),
+		DeepSeekAPIKey:       viper.GetString("DEEPSEEK_API_KEY"),
+		DeepSeekModel:        viper.GetString("DEEPSEEK_MODEL"),
+		GeminiBaseURL:        viper.GetString("GEMINI_BASE_URL"),
+		GeminiAPIKey:         viper.GetString("GEMINI_API_KEY"),
+		GeminiModel:          viper.GetString("GEMINI_MODEL"),
 	}
 }

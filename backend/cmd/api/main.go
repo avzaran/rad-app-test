@@ -29,6 +29,7 @@ func main() {
 	dataService := data.NewService(repos)
 	aiService := ai.NewService(
 		cfg.AIGatewayURL,
+		cfg.AIGatewaySharedSecret,
 		&http.Client{Timeout: 120 * time.Second},
 		repos.Audit,
 	)

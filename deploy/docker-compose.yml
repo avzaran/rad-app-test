@@ -29,6 +29,7 @@ services:
       - STORAGE_BUCKET_NAME=radassist-files
       - RATE_LIMIT_PER_MIN=300
       - AI_GATEWAY_URL=http://ai-gateway:8090
+      - AI_GATEWAY_SHARED_SECRET=${AI_GATEWAY_SHARED_SECRET:-change-me-ai-gateway-secret}
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,10 +48,9 @@ services:
     build:
       context: ../ai-gateway
       dockerfile: Dockerfile
-    ports:
-      - "127.0.0.1:8090:8090"
     environment:
       - PORT=8090
+      - AI_GATEWAY_SHARED_SECRET=${AI_GATEWAY_SHARED_SECRET:-change-me-ai-gateway-secret}
       # Provider: "mock", "openai", "deepseek", or "gemini"
       - PROVIDER_MODE=${PROVIDER_MODE:-mock}
       # OpenAI config

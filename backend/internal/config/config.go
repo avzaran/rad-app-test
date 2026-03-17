@@ -8,17 +8,18 @@ import (
 )
 
 type Config struct {
-	Port               string
-	JWTSecret          string
-	AccessTTLMinutes   int
-	RefreshTTLHours    int
-	RateLimitPerMin    int
-	StorageBaseURL     string
-	StorageBucketName  string
-	AIGatewayURL       string
-	CORSAllowedOrigins []string
-	CookieSecure       bool
-	CookieSameSite     http.SameSite
+	Port                  string
+	JWTSecret             string
+	AccessTTLMinutes      int
+	RefreshTTLHours       int
+	RateLimitPerMin       int
+	StorageBaseURL        string
+	StorageBucketName     string
+	AIGatewayURL          string
+	AIGatewaySharedSecret string
+	CORSAllowedOrigins    []string
+	CookieSecure          bool
+	CookieSameSite        http.SameSite
 }
 
 func Load() Config {
@@ -30,6 +31,7 @@ func Load() Config {
 	viper.SetDefault("STORAGE_BASE_URL", "http://localhost:9000")
 	viper.SetDefault("STORAGE_BUCKET_NAME", "radassist-files")
 	viper.SetDefault("AI_GATEWAY_URL", "http://localhost:8090")
+	viper.SetDefault("AI_GATEWAY_SHARED_SECRET", "")
 	viper.SetDefault("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 	viper.SetDefault("COOKIE_SECURE", false)
 	viper.SetDefault("COOKIE_SAMESITE", "lax")
@@ -37,17 +39,18 @@ func Load() Config {
 	viper.AutomaticEnv()
 
 	return Config{
-		Port:               viper.GetString("PORT"),
-		JWTSecret:          viper.GetString("JWT_SECRET"),
-		AccessTTLMinutes:   viper.GetInt("ACCESS_TTL_MINUTES"),
-		RefreshTTLHours:    viper.GetInt("REFRESH_TTL_HOURS"),
-		RateLimitPerMin:    viper.GetInt("RATE_LIMIT_PER_MIN"),
-		StorageBaseURL:     viper.GetString("STORAGE_BASE_URL"),
-		StorageBucketName:  viper.GetString("STORAGE_BUCKET_NAME"),
-		AIGatewayURL:       viper.GetString("AI_GATEWAY_URL"),
-		CORSAllowedOrigins: parseCSV(viper.GetString("CORS_ALLOWED_ORIGINS")),
-		CookieSecure:       viper.GetBool("COOKIE_SECURE"),
-		CookieSameSite:     parseSameSite(viper.GetString("COOKIE_SAMESITE")),
+		Port:                  viper.GetString("PORT"),
+		JWTSecret:             viper.GetString("JWT_SECRET"),
+		AccessTTLMinutes:      viper.GetInt("ACCESS_TTL_MINUTES"),
+		RefreshTTLHours:       viper.GetInt("REFRESH_TTL_HOURS"),
+		RateLimitPerMin:       viper.GetInt("RATE_LIMIT_PER_MIN"),
+		StorageBaseURL:        viper.GetString("STORAGE_BASE_URL"),
+		StorageBucketName:     viper.GetString("STORAGE_BUCKET_NAME"),
+		AIGatewayURL:          viper.GetString("AI_GATEWAY_URL"),
+		AIGatewaySharedSecret: viper.GetString("AI_GATEWAY_SHARED_SECRET"),
+		CORSAllowedOrigins:    parseCSV(viper.GetString("CORS_ALLOWED_ORIGINS")),
+		CookieSecure:          viper.GetBool("COOKIE_SECURE"),
+		CookieSameSite:        parseSameSite(viper.GetString("COOKIE_SAMESITE")),
 	}
 }
 

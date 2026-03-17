@@ -14,11 +14,14 @@ import (
 	"go.uber.org/zap"
 )
 
+const GatewayAuthHeader = "X-AI-Gateway-Secret"
+
 type Config struct {
 	Timeout        time.Duration
 	Retries        int
 	RetryBackoff   time.Duration
 	CircuitBreaker *resilience.CircuitBreaker
+	SharedSecret   string
 }
 
 type Server struct {
@@ -38,6 +41,7 @@ func New(p provider.Provider, config Config, logger *zap.Logger) *Server {
 func (s *Server) Router() *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(s.requireSharedSecret())
 
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -47,6 +51,22 @@ func (s *Server) Router() *gin.Engine {
 	r.POST("/v1/inference/stream", s.inferenceStream)
 
 	return r
+}
+
+func (s *Server) requireSharedSecret() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.URL.Path == "/healthz" || s.config.SharedSecret == "" {
+			c.Next()
+			return
+		}
+
+		if c.GetHeader(GatewayAuthHeader) != s.config.SharedSecret {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized gateway client"})
+			return
+		}
+
+		c.Next()
+	}
 }
 
 func (s *Server) inference(c *gin.Context) {
