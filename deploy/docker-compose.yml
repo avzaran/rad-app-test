@@ -1,14 +1,14 @@
-﻿services:
+services:
   frontend:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+        VITE_USE_MOCK_API: ${VITE_USE_MOCK_API:-false}
+        VITE_AI_ENABLED: ${VITE_AI_ENABLED:-true}
     ports:
       - "5173:80"
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8080
-      - VITE_USE_MOCK_API=false
-      - VITE_AI_ENABLED=true
     depends_on:
       - backend
 
@@ -88,4 +88,3 @@
 volumes:
   postgres_data:
   minio_data:
-
