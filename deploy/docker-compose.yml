@@ -20,7 +20,7 @@ services:
       - "8080:8080"
     environment:
       - PORT=8080
-      - JWT_SECRET=dev-secret-change-me
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
       - STORAGE_BASE_URL=http://minio:9000
       - STORAGE_BUCKET_NAME=radassist-files
       - RATE_LIMIT_PER_MIN=300
@@ -35,7 +35,7 @@ services:
       context: ../ai-gateway
       dockerfile: Dockerfile
     ports:
-      - "8090:8090"
+      - "127.0.0.1:8090:8090"
     environment:
       - PORT=8090
       # Provider: "mock", "openai", "deepseek", or "gemini"
@@ -58,11 +58,11 @@ services:
     image: postgres:17-alpine
     container_name: radassist_postgres
     environment:
-      POSTGRES_DB: radassist
-      POSTGRES_USER: radassist
-      POSTGRES_PASSWORD: radassist
+      POSTGRES_DB: ${POSTGRES_DB:-radassist}
+      POSTGRES_USER: ${POSTGRES_USER:-radassist}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-local-dev}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -71,11 +71,11 @@ services:
     container_name: radassist_minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-in-local-dev}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio_data:/data
 
@@ -83,7 +83,7 @@ services:
     image: redis:8-alpine
     container_name: radassist_redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
 volumes:
   postgres_data:
