@@ -146,7 +146,7 @@ export function ProtocolEditor() {
             )}
           <AutocompleteTextarea
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onValueChange={setContent}
             rows={20}
             modality={protocol.modality}
             templateContent={protocol.template?.content ?? ""}

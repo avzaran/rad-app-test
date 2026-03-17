@@ -1,38 +1,65 @@
-import { useRef, useState, useCallback, type ChangeEvent, type ComponentProps } from "react";
+import {
+  useRef,
+  useState,
+  useCallback,
+  useLayoutEffect,
+  type ComponentProps,
+  type KeyboardEvent,
+  type MouseEvent,
+  type UIEvent,
+  type SyntheticEvent,
+} from "react";
 import { Textarea } from "../ui/textarea";
 import { cn } from "../ui/utils";
 import { useAutocomplete } from "../../hooks/useAutocomplete";
 
 type AutocompleteTextareaProps = Omit<ComponentProps<"textarea">, "onChange" | "value"> & {
   value: string;
-  onChange: (e: ChangeEvent<HTMLTextAreaElement>) => void;
+  onValueChange: (value: string) => void;
   modality: string;
   templateContent: string;
   protocolId: string;
   autocompleteEnabled: boolean;
 };
 
-/** Shared text styles so the mirror div and textarea render identically. */
 const sharedTextClasses = "font-mono text-base leading-relaxed md:text-sm";
 
 export function AutocompleteTextarea({
   value,
-  onChange,
+  onValueChange,
   modality,
   templateContent,
   protocolId,
   autocompleteEnabled,
   className,
+  onKeyDown,
+  onKeyDownCapture,
+  onSelect,
+  onClick,
+  onScroll,
   ...props
 }: AutocompleteTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mirrorRef = useRef<HTMLDivElement>(null);
+  const pendingSelectionRef = useRef<number | null>(null);
   const [cursorPos, setCursorPos] = useState(value.length);
 
   const updateCursor = useCallback(() => {
     const el = textareaRef.current;
     if (el) setCursorPos(el.selectionStart);
   }, []);
+
+  useLayoutEffect(() => {
+    const pendingSelection = pendingSelectionRef.current;
+    const textarea = textareaRef.current;
+    if (pendingSelection === null || !textarea) {
+      return;
+    }
+
+    textarea.focus();
+    textarea.setSelectionRange(pendingSelection, pendingSelection);
+    pendingSelectionRef.current = null;
+  }, [value]);
 
   const { suggestion, accept, dismiss } = useAutocomplete({
     content: value,
@@ -45,53 +72,81 @@ export function AutocompleteTextarea({
 
   const textBeforeCursor = value.slice(0, cursorPos);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (suggestion) {
+  const handleAutocompleteKey = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (!suggestion) {
+        return false;
+      }
+
       if (e.key === "Tab") {
         e.preventDefault();
+        e.stopPropagation();
+        
         const newContent = accept();
         const newCursorPos = cursorPos + suggestion.length;
-        // Create a synthetic change event via native setter so React picks it up
-        const textarea = textareaRef.current;
-        if (textarea) {
-          const nativeSetter = Object.getOwnPropertyDescriptor(
-            HTMLTextAreaElement.prototype,
-            "value",
-          )?.set;
-          if (nativeSetter) {
-            nativeSetter.call(textarea, newContent);
-            textarea.dispatchEvent(new Event("input", { bubbles: true }));
-          }
-          setCursorPos(newCursorPos);
-          requestAnimationFrame(() => {
-            textarea.selectionStart = newCursorPos;
-            textarea.selectionEnd = newCursorPos;
-          });
-        }
-        return;
+        pendingSelectionRef.current = newCursorPos;
+        setCursorPos(newCursorPos);
+        onValueChange(newContent);
+        return true;
       }
+
       if (e.key === "Escape") {
         e.preventDefault();
+        e.stopPropagation();
         dismiss();
-        return;
+        return true;
       }
+
+      return false;
+    },
+    [accept, cursorPos, dismiss, onValueChange, suggestion],
+  );
+
+  const handleKeyDownCapture = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (handleAutocompleteKey(e)) {
+      return;
+    }
+    onKeyDownCapture?.(e);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!e.defaultPrevented) {
+      handleAutocompleteKey(e);
+    }
+    if (!e.defaultPrevented) {
+      onKeyDown?.(e);
     }
   };
 
-  const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    setCursorPos(e.target.selectionStart);
-    onChange(e);
+  const handleChange = (e: SyntheticEvent<HTMLTextAreaElement>) => {
+    const target = e.currentTarget;
+    setCursorPos(target.selectionStart);
+    onValueChange(target.value);
   };
 
-  const handleScroll = () => {
+  const syncScroll = useCallback(() => {
     if (textareaRef.current && mirrorRef.current) {
       mirrorRef.current.scrollTop = textareaRef.current.scrollTop;
     }
+  }, []);
+
+  const handleSelect = (e: SyntheticEvent<HTMLTextAreaElement>) => {
+    updateCursor();
+    onSelect?.(e);
+  };
+
+  const handleClick = (e: MouseEvent<HTMLTextAreaElement>) => {
+    updateCursor();
+    onClick?.(e);
+  };
+
+  const handleScrollEvent = (e: UIEvent<HTMLTextAreaElement>) => {
+    syncScroll();
+    onScroll?.(e);
   };
 
   return (
     <div className="relative">
-      {/* Mirror div — ghost text overlay. Must match textarea styling exactly. */}
       <div
         ref={mirrorRef}
         aria-hidden="true"
@@ -107,15 +162,15 @@ export function AutocompleteTextarea({
         )}
       </div>
 
-      {/* Actual textarea */}
       <Textarea
         ref={textareaRef}
         value={value}
         onChange={handleChange}
+        onKeyDownCapture={handleKeyDownCapture}
         onKeyDown={handleKeyDown}
-        onSelect={updateCursor}
-        onClick={updateCursor}
-        onScroll={handleScroll}
+        onSelect={handleSelect}
+        onClick={handleClick}
+        onScroll={handleScrollEvent}
         className={cn("bg-transparent", sharedTextClasses, className)}
         {...props}
       />
