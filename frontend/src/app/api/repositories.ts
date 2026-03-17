@@ -198,7 +198,7 @@ export const api = {
     }
     formData.append("modality", modality);
 
-    const response = await http.post("/uploaded-templates/upload-batch", formData, {
+    const response = await http.post("/templates/upload/batch", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return uploadedTemplatesSchema.parse(response.data);
@@ -209,7 +209,7 @@ export const api = {
       return mockDb.listUploadedTemplates();
     }
 
-    const response = await http.get("/uploaded-templates");
+    const response = await http.get("/templates/uploaded");
     return uploadedTemplatesSchema.parse(response.data);
   },
 
@@ -218,7 +218,7 @@ export const api = {
       return mockDb.deleteUploadedTemplate(id);
     }
 
-    await http.delete(`/uploaded-templates/${id}`);
+    await http.delete(`/templates/uploaded/${id}`);
   },
 
   getUploadedTemplate: async (id: string): Promise<UploadedTemplate> => {
@@ -226,7 +226,7 @@ export const api = {
       return mockDb.getUploadedTemplate(id);
     }
 
-    const response = await http.get(`/uploaded-templates/${id}`);
+    const response = await http.get(`/templates/uploaded/${id}`);
     return uploadedTemplateSchema.parse(response.data);
   },
 
@@ -235,7 +235,7 @@ export const api = {
       return mockDb.getUploadedTemplatesByModality(modality);
     }
 
-    const response = await http.get(`/uploaded-templates/by-modality/${modality}`);
+    const response = await http.get(`/templates/uploaded/modality/${modality}`);
     return uploadedTemplatesSchema.parse(response.data);
   },
 
@@ -329,4 +329,5 @@ export const api = {
     }
   },
 };
+
 
