@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"fmt"
@@ -14,25 +14,34 @@ import (
 )
 
 type Handler struct {
-	authService   *auth.Service
-	dataService   *data.Service
-	storageBase   string
-	storageBucket string
-	refreshHours  int
+	authService    *auth.Service
+	dataService    *data.Service
+	storageBase    string
+	storageBucket  string
+	refreshHours   int
+	cookieSecure   bool
+	cookieSameSite http.SameSite
 }
 
-func New(authService *auth.Service, dataService *data.Service, storageBase, storageBucket string, refreshHours int) *Handler {
+func New(authService *auth.Service, dataService *data.Service, storageBase, storageBucket string, refreshHours int, cookieSecure bool, cookieSameSite http.SameSite) *Handler {
 	return &Handler{
-		authService:   authService,
-		dataService:   dataService,
-		storageBase:   strings.TrimSuffix(storageBase, "/"),
-		storageBucket: storageBucket,
-		refreshHours:  refreshHours,
+		authService:    authService,
+		dataService:    dataService,
+		storageBase:    strings.TrimSuffix(storageBase, "/"),
+		storageBucket:  storageBucket,
+		refreshHours:   refreshHours,
+		cookieSecure:   cookieSecure,
+		cookieSameSite: cookieSameSite,
 	}
 }
 
 func (h *Handler) Healthz(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (h *Handler) setRefreshCookie(c *gin.Context, value string, maxAge int) {
+	c.SetSameSite(h.cookieSameSite)
+	c.SetCookie("refresh_token", value, maxAge, "/", "", h.cookieSecure, true)
 }
 
 func (h *Handler) Login(c *gin.Context) {
@@ -52,7 +61,7 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("refresh_token", result.RefreshToken, h.refreshHours*3600, "/", "", false, true)
+	h.setRefreshCookie(c, result.RefreshToken, h.refreshHours*3600)
 	c.JSON(http.StatusOK, gin.H{
 		"accessToken": result.AccessToken,
 		"user": gin.H{
@@ -70,7 +79,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	if refreshToken != "" {
 		h.authService.Logout(refreshToken)
 	}
-	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
+	h.setRefreshCookie(c, "", -1)
 	c.Status(http.StatusNoContent)
 }
 
@@ -87,7 +96,7 @@ func (h *Handler) Refresh(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("refresh_token", rotatedRefresh, h.refreshHours*3600, "/", "", false, true)
+	h.setRefreshCookie(c, rotatedRefresh, h.refreshHours*3600)
 	c.JSON(http.StatusOK, gin.H{"accessToken": accessToken})
 }
 
@@ -331,7 +340,7 @@ func (h *Handler) PresignDownload(c *gin.Context) {
 	})
 }
 
-// UploadTemplate handles POST /templates/upload — single DOCX file upload.
+// UploadTemplate handles POST /templates/upload вЂ” single DOCX file upload.
 func (h *Handler) UploadTemplate(c *gin.Context) {
 	user := middleware.CurrentUser(c)
 	if user == nil {
@@ -357,7 +366,7 @@ func (h *Handler) UploadTemplate(c *gin.Context) {
 	c.JSON(http.StatusCreated, result)
 }
 
-// UploadTemplateBatch handles POST /templates/upload/batch — batch DOCX upload.
+// UploadTemplateBatch handles POST /templates/upload/batch вЂ” batch DOCX upload.
 func (h *Handler) UploadTemplateBatch(c *gin.Context) {
 	user := middleware.CurrentUser(c)
 	if user == nil {
@@ -388,7 +397,7 @@ func (h *Handler) UploadTemplateBatch(c *gin.Context) {
 	c.JSON(http.StatusCreated, results)
 }
 
-// ListUploadedTemplates handles GET /templates/uploaded — list all uploaded templates.
+// ListUploadedTemplates handles GET /templates/uploaded вЂ” list all uploaded templates.
 func (h *Handler) ListUploadedTemplates(c *gin.Context) {
 	items, err := h.dataService.ListUploadedTemplates(c.Request.Context())
 	if err != nil {
@@ -398,7 +407,7 @@ func (h *Handler) ListUploadedTemplates(c *gin.Context) {
 	c.JSON(http.StatusOK, items)
 }
 
-// GetUploadedTemplate handles GET /templates/uploaded/:id — get single uploaded template.
+// GetUploadedTemplate handles GET /templates/uploaded/:id вЂ” get single uploaded template.
 func (h *Handler) GetUploadedTemplate(c *gin.Context) {
 	item, err := h.dataService.GetUploadedTemplate(c.Request.Context(), c.Param("id"))
 	if err != nil {
@@ -418,7 +427,7 @@ func (h *Handler) GetUploadedTemplatesByModality(c *gin.Context) {
 	c.JSON(http.StatusOK, items)
 }
 
-// DeleteUploadedTemplate handles DELETE /templates/uploaded/:id — delete an uploaded template.
+// DeleteUploadedTemplate handles DELETE /templates/uploaded/:id вЂ” delete an uploaded template.
 func (h *Handler) DeleteUploadedTemplate(c *gin.Context) {
 	if err := h.dataService.DeleteUploadedTemplate(c.Request.Context(), c.Param("id")); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})

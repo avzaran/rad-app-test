@@ -1,16 +1,24 @@
-﻿package config
+package config
 
-import "github.com/spf13/viper"
+import (
+	"net/http"
+	"strings"
+
+	"github.com/spf13/viper"
+)
 
 type Config struct {
-	Port              string
-	JWTSecret         string
-	AccessTTLMinutes  int
-	RefreshTTLHours   int
-	RateLimitPerMin   int
-	StorageBaseURL    string
-	StorageBucketName string
-	AIGatewayURL      string
+	Port               string
+	JWTSecret          string
+	AccessTTLMinutes   int
+	RefreshTTLHours    int
+	RateLimitPerMin    int
+	StorageBaseURL     string
+	StorageBucketName  string
+	AIGatewayURL       string
+	CORSAllowedOrigins []string
+	CookieSecure       bool
+	CookieSameSite     http.SameSite
 }
 
 func Load() Config {
@@ -22,17 +30,50 @@ func Load() Config {
 	viper.SetDefault("STORAGE_BASE_URL", "http://localhost:9000")
 	viper.SetDefault("STORAGE_BUCKET_NAME", "radassist-files")
 	viper.SetDefault("AI_GATEWAY_URL", "http://localhost:8090")
+	viper.SetDefault("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+	viper.SetDefault("COOKIE_SECURE", false)
+	viper.SetDefault("COOKIE_SAMESITE", "lax")
 
 	viper.AutomaticEnv()
 
 	return Config{
-		Port:              viper.GetString("PORT"),
-		JWTSecret:         viper.GetString("JWT_SECRET"),
-		AccessTTLMinutes:  viper.GetInt("ACCESS_TTL_MINUTES"),
-		RefreshTTLHours:   viper.GetInt("REFRESH_TTL_HOURS"),
-		RateLimitPerMin:   viper.GetInt("RATE_LIMIT_PER_MIN"),
-		StorageBaseURL:    viper.GetString("STORAGE_BASE_URL"),
-		StorageBucketName: viper.GetString("STORAGE_BUCKET_NAME"),
-		AIGatewayURL:      viper.GetString("AI_GATEWAY_URL"),
+		Port:               viper.GetString("PORT"),
+		JWTSecret:          viper.GetString("JWT_SECRET"),
+		AccessTTLMinutes:   viper.GetInt("ACCESS_TTL_MINUTES"),
+		RefreshTTLHours:    viper.GetInt("REFRESH_TTL_HOURS"),
+		RateLimitPerMin:    viper.GetInt("RATE_LIMIT_PER_MIN"),
+		StorageBaseURL:     viper.GetString("STORAGE_BASE_URL"),
+		StorageBucketName:  viper.GetString("STORAGE_BUCKET_NAME"),
+		AIGatewayURL:       viper.GetString("AI_GATEWAY_URL"),
+		CORSAllowedOrigins: parseCSV(viper.GetString("CORS_ALLOWED_ORIGINS")),
+		CookieSecure:       viper.GetBool("COOKIE_SECURE"),
+		CookieSameSite:     parseSameSite(viper.GetString("COOKIE_SAMESITE")),
+	}
+}
+
+func parseCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+func parseSameSite(value string) http.SameSite {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "strict":
+		return http.SameSiteStrictMode
+	case "none":
+		return http.SameSiteNoneMode
+	case "default":
+		return http.SameSiteDefaultMode
+	case "lax", "":
+		fallthrough
+	default:
+		return http.SameSiteLaxMode
 	}
 }

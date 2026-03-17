@@ -17,19 +17,30 @@ import (
 func NewRouter(cfg config.Config, authService *auth.Service, dataService *data.Service, aiService *ai.Service, logger *zap.Logger) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
+	allowedOrigins := make(map[string]struct{}, len(cfg.CORSAllowedOrigins))
+	for _, origin := range cfg.CORSAllowedOrigins {
+		allowedOrigins[origin] = struct{}{}
+	}
+
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		if origin == "" {
-			origin = "*"
-		}
-		c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Add("Vary", "Origin")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-Id")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
+
+		if origin != "" {
+			if _, ok := allowedOrigins[origin]; !ok {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "origin not allowed"})
+				return
+			}
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
+
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 		c.Next()
@@ -38,7 +49,7 @@ func NewRouter(cfg config.Config, authService *auth.Service, dataService *data.S
 	router.Use(middleware.Logger(logger))
 	router.Use(middleware.RateLimit(cfg.RateLimitPerMin))
 
-	h := handlers.New(authService, dataService, cfg.StorageBaseURL, cfg.StorageBucketName, cfg.RefreshTTLHours)
+	h := handlers.New(authService, dataService, cfg.StorageBaseURL, cfg.StorageBucketName, cfg.RefreshTTLHours, cfg.CookieSecure, cfg.CookieSameSite)
 	aiH := handlers.NewAIHandler(aiService, dataService)
 
 	router.GET("/healthz", h.Healthz)
@@ -82,7 +93,6 @@ func NewRouter(cfg config.Config, authService *auth.Service, dataService *data.S
 		protected.POST("/files/presign-upload", h.PresignUpload)
 		protected.POST("/files/presign-download", h.PresignDownload)
 
-		// AI endpoints
 		aiGroup := protected.Group("/ai")
 		{
 			aiGroup.POST("/generate", aiH.AIGenerate)

@@ -1,7 +1,8 @@
-﻿package auth
+package auth
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -111,23 +112,33 @@ func (s *Service) Verify2FA(userID, code string) bool {
 func (s *Service) Logout(refreshToken string) {
 	delete(s.refreshStorage, refreshToken)
 }
+
 func (s *Service) ParseAccessToken(accessToken string) (*domain.User, error) {
-	token, err := jwt.Parse(accessToken, func(token *jwt.Token) (interface{}, error) {
-		return s.jwtSecret, nil
-	})
+	claims := jwt.MapClaims{}
+	token, err := jwt.ParseWithClaims(
+		accessToken,
+		claims,
+		func(token *jwt.Token) (interface{}, error) {
+			if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+				return nil, fmt.Errorf("unexpected signing method: %s", token.Method.Alg())
+			}
+			return s.jwtSecret, nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithExpirationRequired(),
+	)
 	if err != nil || !token.Valid {
 		return nil, errors.New("invalid token")
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return nil, errors.New("invalid token claims")
 	}
 
 	userID, _ := claims["sub"].(string)
 	role, _ := claims["role"].(string)
 	email, _ := claims["email"].(string)
 	fullName, _ := claims["fullName"].(string)
+
+	if userID == "" || role == "" {
+		return nil, errors.New("invalid token claims")
+	}
 
 	return &domain.User{
 		ID:       userID,
@@ -155,4 +166,3 @@ func (s *Service) newAccessToken(user domain.User) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(s.jwtSecret)
 }
-

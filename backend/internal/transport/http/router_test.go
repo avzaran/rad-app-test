@@ -1,18 +1,21 @@
-﻿package http
+package http
 
 import (
 	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/radassist/backend/internal/config"
 	"github.com/radassist/backend/internal/repository/memory"
+	"github.com/radassist/backend/internal/service/ai"
 	"github.com/radassist/backend/internal/service/auth"
 	"github.com/radassist/backend/internal/service/data"
 	"go.uber.org/zap"
+	gohttp "net/http"
 )
 
 func testRouter() http.Handler {
@@ -23,14 +26,22 @@ func testRouter() http.Handler {
 		RateLimitPerMin:   1000,
 		StorageBaseURL:    "http://localhost:9000",
 		StorageBucketName: "radassist-files",
+		AIGatewayURL:      "http://localhost:8090",
+		CORSAllowedOrigins: []string{
+			"http://localhost:5173",
+			"http://127.0.0.1:5173",
+		},
+		CookieSecure:   false,
+		CookieSameSite: gohttp.SameSiteLaxMode,
 	}
 
 	repos := memory.NewRepositories()
 	authService := auth.NewService(repos, cfg.JWTSecret, 15*time.Minute, 48*time.Hour)
 	dataService := data.NewService(repos)
+	aiService := ai.NewService(cfg.AIGatewayURL, &http.Client{Timeout: time.Second}, repos.Audit)
 
 	logger := zap.NewNop()
-	return NewRouter(cfg, authService, dataService, logger)
+	return NewRouter(cfg, authService, dataService, aiService, logger)
 }
 
 func TestHealthz(t *testing.T) {
@@ -60,6 +71,17 @@ func TestLoginAndMe(t *testing.T) {
 		t.Fatalf("expected login status %d, got %d", http.StatusOK, loginRes.Code)
 	}
 
+	cookieHeader := loginRes.Header().Get("Set-Cookie")
+	if !strings.Contains(cookieHeader, "HttpOnly") {
+		t.Fatalf("expected refresh cookie to be HttpOnly, got %q", cookieHeader)
+	}
+	if !strings.Contains(cookieHeader, "SameSite=Lax") {
+		t.Fatalf("expected refresh cookie SameSite=Lax, got %q", cookieHeader)
+	}
+	if strings.Contains(cookieHeader, "Secure") {
+		t.Fatalf("did not expect Secure flag in local test cookie, got %q", cookieHeader)
+	}
+
 	var loginData map[string]any
 	_ = json.Unmarshal(loginRes.Body.Bytes(), &loginData)
 
@@ -75,5 +97,38 @@ func TestLoginAndMe(t *testing.T) {
 
 	if meRes.Code != http.StatusOK {
 		t.Fatalf("expected /me status %d, got %d", http.StatusOK, meRes.Code)
+	}
+}
+
+func TestCORSAllowsConfiguredOrigin(t *testing.T) {
+	router := testRouter()
+	req := httptest.NewRequest(http.MethodOptions, "/auth/login", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d", http.StatusNoContent, res.Code)
+	}
+	if got := res.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
+		t.Fatalf("expected allow origin header to be set, got %q", got)
+	}
+	if got := res.Header().Values("Vary"); len(got) == 0 || got[0] != "Origin" {
+		t.Fatalf("expected Vary: Origin header, got %v", got)
+	}
+}
+
+func TestCORSRejectsUnknownOrigin(t *testing.T) {
+	router := testRouter()
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Header.Set("Origin", "http://evil.example")
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, res.Code)
 	}
 }
