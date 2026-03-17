@@ -13,6 +13,7 @@ import { useAIStream } from "../../hooks/useAI";
 import { AIStreamingText } from "./AIStreamingText";
 import { type SectionName } from "./AISectionInsert";
 import { QuickInsertPalette } from "./QuickInsertPalette";
+import { TemplateContextSelector } from "./TemplateContextSelector";
 import type { Modality } from "../../types/models";
 import type { AISection } from "../../types/ai";
 
@@ -38,6 +39,7 @@ export function AIAssistantPanel({
   const { text, isStreaming, error, tokensUsed, start, stop, reset } = useAIStream();
   const [question, setQuestion] = useState("");
   const [copied, setCopied] = useState(false);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
 
   const generate = (section: AISection) => {
     start({
@@ -46,6 +48,7 @@ export function AIAssistantPanel({
       section,
       currentContent,
       protocolId,
+      ...(selectedTemplateIds.length > 0 ? { uploadedTemplateIds: selectedTemplateIds } : {}),
     });
   };
 
@@ -58,6 +61,7 @@ export function AIAssistantPanel({
       currentContent,
       userMessage: question.trim(),
       protocolId,
+      ...(selectedTemplateIds.length > 0 ? { uploadedTemplateIds: selectedTemplateIds } : {}),
     });
     setQuestion("");
   };
@@ -80,9 +84,26 @@ export function AIAssistantPanel({
 
       <ScrollArea className="flex-1">
         <div className="space-y-3 p-4">
+          {/* Template context selector */}
+          <TemplateContextSelector
+            modality={modality}
+            selectedIds={selectedTemplateIds}
+            onSelectionChange={setSelectedTemplateIds}
+          />
+
           {/* Quick actions */}
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">Быстрые действия</p>
+            {selectedTemplateIds.length > 0 && (
+              <p className="text-[10px] text-primary">
+                С учётом {selectedTemplateIds.length}{" "}
+                {selectedTemplateIds.length === 1
+                  ? "шаблона"
+                  : selectedTemplateIds.length < 5
+                    ? "шаблонов"
+                    : "шаблонов"}
+              </p>
+            )}
             <Button
               variant="outline"
               size="sm"

@@ -23,12 +23,14 @@ type Service struct {
 
 // GenerateRequest is the input from the frontend.
 type GenerateRequest struct {
-	Modality        string `json:"modality"`
-	TemplateContent string `json:"templateContent"`
-	Section         string `json:"section"`
-	CurrentContent  string `json:"currentContent"`
-	UserMessage     string `json:"userMessage"`
-	ProtocolID      string `json:"protocolId"`
+	Modality            string   `json:"modality"`
+	TemplateContent     string   `json:"templateContent"`
+	Section             string   `json:"section"`
+	CurrentContent      string   `json:"currentContent"`
+	UserMessage         string   `json:"userMessage"`
+	ProtocolID          string   `json:"protocolId"`
+	UploadedTemplateIDs []string `json:"uploadedTemplateIds,omitempty"`
+	TemplateContext     string   `json:"-"` // populated by handler, not from JSON
 }
 
 // GenerateResponse is the synchronous output to the frontend.
@@ -171,6 +173,7 @@ func (s *Service) buildGatewayRequest(req GenerateRequest) gatewayRequest {
 		TemplateContent: sanitizedTemplate,
 		CurrentContent:  sanitizedContent,
 		UserMessage:     sanitizedMessage,
+		TemplateContext: req.TemplateContext,
 	})
 
 	return gatewayRequest{

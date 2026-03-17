@@ -330,3 +330,100 @@ func (h *Handler) PresignDownload(c *gin.Context) {
 		"expiresAt": expiresAt.Format(time.RFC3339),
 	})
 }
+
+// UploadTemplate handles POST /templates/upload — single DOCX file upload.
+func (h *Handler) UploadTemplate(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file field is required"})
+		return
+	}
+	defer file.Close()
+
+	modality := c.PostForm("modality")
+
+	result, err := h.dataService.UploadTemplate(c.Request.Context(), file, header, modality, user.ID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, result)
+}
+
+// UploadTemplateBatch handles POST /templates/upload/batch — batch DOCX upload.
+func (h *Handler) UploadTemplateBatch(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	form, err := c.MultipartForm()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "multipart form is required"})
+		return
+	}
+
+	files := form.File["files"]
+	if len(files) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "files field is required"})
+		return
+	}
+
+	modality := c.PostForm("modality")
+
+	results, err := h.dataService.UploadTemplatesBatch(c.Request.Context(), files, form, modality, user.ID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, results)
+}
+
+// ListUploadedTemplates handles GET /templates/uploaded — list all uploaded templates.
+func (h *Handler) ListUploadedTemplates(c *gin.Context) {
+	items, err := h.dataService.ListUploadedTemplates(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, items)
+}
+
+// GetUploadedTemplate handles GET /templates/uploaded/:id — get single uploaded template.
+func (h *Handler) GetUploadedTemplate(c *gin.Context) {
+	item, err := h.dataService.GetUploadedTemplate(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "uploaded template not found"})
+		return
+	}
+	c.JSON(http.StatusOK, item)
+}
+
+// GetUploadedTemplatesByModality handles GET /templates/uploaded/modality/:modality.
+func (h *Handler) GetUploadedTemplatesByModality(c *gin.Context) {
+	items, err := h.dataService.GetUploadedTemplatesByModality(c.Request.Context(), c.Param("modality"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, items)
+}
+
+// DeleteUploadedTemplate handles DELETE /templates/uploaded/:id — delete an uploaded template.
+func (h *Handler) DeleteUploadedTemplate(c *gin.Context) {
+	if err := h.dataService.DeleteUploadedTemplate(c.Request.Context(), c.Param("id")); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}

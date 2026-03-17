@@ -1,6 +1,7 @@
 ﻿package memory
 
 import (
+	"context"
 	"errors"
 	"sort"
 	"strings"
@@ -13,12 +14,13 @@ import (
 )
 
 type store struct {
-	mu        sync.RWMutex
-	users     map[string]domain.User
-	patients  map[string]domain.Patient
-	templates map[string]domain.Template
-	protocols map[string]domain.Protocol
-	audit     []domain.AuditEvent
+	mu                sync.RWMutex
+	users             map[string]domain.User
+	patients          map[string]domain.Patient
+	templates         map[string]domain.Template
+	protocols         map[string]domain.Protocol
+	audit             []domain.AuditEvent
+	uploadedTemplates map[string]domain.UploadedTemplate
 }
 
 func NewRepositories() repository.Repositories {
@@ -51,8 +53,9 @@ func NewRepositories() repository.Repositories {
 			"t1": {ID: "t1", Name: "КТ органов грудной клетки", Modality: "CT", Content: "ТЕХНИКА ИССЛЕДОВАНИЯ:\n...", CreatedAt: now},
 			"t2": {ID: "t2", Name: "МРТ головного мозга", Modality: "MRI", Content: "ТЕХНИКА ИССЛЕДОВАНИЯ:\n...", CreatedAt: now},
 		},
-		protocols: map[string]domain.Protocol{},
-		audit:     []domain.AuditEvent{},
+		protocols:         map[string]domain.Protocol{},
+		audit:             []domain.AuditEvent{},
+		uploadedTemplates: map[string]domain.UploadedTemplate{},
 	}
 
 	for _, patient := range s.patients {
@@ -70,11 +73,12 @@ func NewRepositories() repository.Repositories {
 	}
 
 	return repository.Repositories{
-		Users:     &userRepo{s},
-		Patients:  &patientRepo{s},
-		Templates: &templateRepo{s},
-		Protocols: &protocolRepo{s},
-		Audit:     &auditRepo{s},
+		Users:             &userRepo{s},
+		Patients:          &patientRepo{s},
+		Templates:         &templateRepo{s},
+		Protocols:         &protocolRepo{s},
+		Audit:             &auditRepo{s},
+		UploadedTemplates: &uploadedTemplateRepo{s},
 	}
 }
 
@@ -87,6 +91,8 @@ type templateRepo struct{ s *store }
 type protocolRepo struct{ s *store }
 
 type auditRepo struct{ s *store }
+
+type uploadedTemplateRepo struct{ s *store }
 
 func (r *userRepo) FindByEmail(email string) (*domain.User, error) {
 	r.s.mu.RLock()
@@ -324,6 +330,75 @@ func (r *auditRepo) Add(event domain.AuditEvent) error {
 	event.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 	r.s.audit = append(r.s.audit, event)
 	return nil
+}
+
+// --- UploadedTemplate repository ---
+
+func (r *uploadedTemplateRepo) ListUploadedTemplates(_ context.Context) ([]domain.UploadedTemplate, error) {
+	r.s.mu.RLock()
+	defer r.s.mu.RUnlock()
+
+	items := make([]domain.UploadedTemplate, 0, len(r.s.uploadedTemplates))
+	for _, t := range r.s.uploadedTemplates {
+		items = append(items, t)
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
+
+	return items, nil
+}
+
+func (r *uploadedTemplateRepo) CreateUploadedTemplate(_ context.Context, t domain.UploadedTemplate) error {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+
+	r.s.uploadedTemplates[t.ID] = t
+	return nil
+}
+
+func (r *uploadedTemplateRepo) DeleteUploadedTemplate(_ context.Context, id string) error {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+
+	if _, ok := r.s.uploadedTemplates[id]; !ok {
+		return errors.New("uploaded template not found")
+	}
+
+	delete(r.s.uploadedTemplates, id)
+	return nil
+}
+
+func (r *uploadedTemplateRepo) GetUploadedTemplate(_ context.Context, id string) (*domain.UploadedTemplate, error) {
+	r.s.mu.RLock()
+	defer r.s.mu.RUnlock()
+
+	t, ok := r.s.uploadedTemplates[id]
+	if !ok {
+		return nil, errors.New("uploaded template not found")
+	}
+
+	cp := t
+	return &cp, nil
+}
+
+func (r *uploadedTemplateRepo) GetUploadedTemplatesByModality(_ context.Context, modality string) ([]domain.UploadedTemplate, error) {
+	r.s.mu.RLock()
+	defer r.s.mu.RUnlock()
+
+	var items []domain.UploadedTemplate
+	for _, t := range r.s.uploadedTemplates {
+		if strings.EqualFold(t.Modality, modality) {
+			items = append(items, t)
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
+
+	return items, nil
 }
 
 

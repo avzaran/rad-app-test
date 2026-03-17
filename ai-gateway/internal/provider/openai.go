@@ -13,10 +13,11 @@ import (
 
 // OpenAIProvider calls any OpenAI-compatible chat completions endpoint.
 type OpenAIProvider struct {
-	baseURL string
-	apiKey  string
-	model   string
-	client  *http.Client
+	baseURL         string
+	apiKey          string
+	model           string
+	completionsPath string // default: "/v1/chat/completions"
+	client          *http.Client
 }
 
 func NewOpenAIProvider(baseURL, apiKey, model string, client *http.Client) *OpenAIProvider {
@@ -24,11 +25,19 @@ func NewOpenAIProvider(baseURL, apiKey, model string, client *http.Client) *Open
 		client = http.DefaultClient
 	}
 	return &OpenAIProvider{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		apiKey:  apiKey,
-		model:   model,
-		client:  client,
+		baseURL:         strings.TrimRight(baseURL, "/"),
+		apiKey:          apiKey,
+		model:           model,
+		completionsPath: "/v1/chat/completions",
+		client:          client,
 	}
+}
+
+// WithCompletionsPath overrides the default /v1/chat/completions path.
+// Useful for providers like Gemini that use a different path.
+func (p *OpenAIProvider) WithCompletionsPath(path string) *OpenAIProvider {
+	p.completionsPath = path
+	return p
 }
 
 // -- OpenAI API types --
@@ -196,7 +205,7 @@ func (p *OpenAIProvider) newHTTPRequest(ctx context.Context, body openAIRequest)
 		return nil, err
 	}
 
-	url := p.baseURL + "/v1/chat/completions"
+	url := p.baseURL + p.completionsPath
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, err

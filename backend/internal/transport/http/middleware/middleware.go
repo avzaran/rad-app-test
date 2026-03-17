@@ -2,6 +2,7 @@
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,6 +46,9 @@ func Logger(logger *zap.Logger) gin.HandlerFunc {
 	}
 }
 
+// RateLimit applies per-IP rate limiting with a sliding window.
+// Auth endpoints (/auth/*) are excluded from rate limiting so that
+// login/refresh flows are never blocked by general API traffic.
 func RateLimit(limitPerMinute int) gin.HandlerFunc {
 	type client struct {
 		count    int
@@ -55,6 +59,13 @@ func RateLimit(limitPerMinute int) gin.HandlerFunc {
 	var mu sync.Mutex
 
 	return func(c *gin.Context) {
+		// Skip rate limiting for auth endpoints — they must always be reachable
+		// to prevent login/refresh deadlocks (429 on refresh → user locked out).
+		if strings.HasPrefix(c.FullPath(), "/auth") {
+			c.Next()
+			return
+		}
+
 		ip := c.ClientIP()
 		now := time.Now()
 

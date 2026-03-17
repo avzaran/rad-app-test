@@ -32,3 +32,14 @@ export type OpenProtocol = {
   id: string;
   patient: Patient;
 };
+
+export interface UploadedTemplate {
+  id: string;
+  fileName: string;
+  originalName: string;
+  modality: Modality;
+  extractedText: string;
+  fileSize: number;
+  uploadedBy: string;
+  createdAt: string;
+}

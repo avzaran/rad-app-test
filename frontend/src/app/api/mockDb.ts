@@ -1,4 +1,4 @@
-﻿import type { Patient, Protocol, Template } from "../types/models";
+﻿import type { Patient, Protocol, Template, UploadedTemplate, Modality } from "../types/models";
 import type { AuthUser, LoginRequest, LoginResponse, RefreshResponse } from "../types/auth";
 
 const STORAGE_KEY = "radassist-mock-db-v2";
@@ -7,6 +7,7 @@ type MockDb = {
   patients: Patient[];
   templates: Template[];
   protocols: Protocol[];
+  uploadedTemplates: UploadedTemplate[];
   users: Array<AuthUser & { password: string }>;
   refreshTokens: Record<string, string>;
 };
@@ -84,6 +85,31 @@ const seedProtocols: Protocol[] = [
   },
 ];
 
+const seedUploadedTemplates: UploadedTemplate[] = [
+  {
+    id: "ut-1",
+    fileName: "ct_chest_template_ut1.docx",
+    originalName: "КТ_грудной_клетки_шаблон.docx",
+    modality: "CT",
+    extractedText:
+      "ТЕХНИКА ИССЛЕДОВАНИЯ:\nКТ органов грудной клетки выполнена по стандартному протоколу.\n\nОПИСАНИЕ:\nЛегочные поля без очаговых и инфильтративных изменений. Трахея и крупные бронхи проходимы. Средостение не расширено.\n\nЗАКЛЮЧЕНИЕ:\nПатологических изменений не выявлено.",
+    fileSize: 24576,
+    uploadedBy: "Администратор",
+    createdAt: "2026-02-10T14:30:00Z",
+  },
+  {
+    id: "ut-2",
+    fileName: "mri_brain_template_ut2.docx",
+    originalName: "МРТ_головного_мозга_стандарт.docx",
+    modality: "MRI",
+    extractedText:
+      "ТЕХНИКА ИССЛЕДОВАНИЯ:\nМРТ головного мозга выполнена в стандартных режимах (Т1, Т2, FLAIR, DWI).\n\nОПИСАНИЕ:\nСтруктуры головного мозга без патологических изменений. Желудочковая система не расширена. Срединные структуры не смещены.\n\nЗАКЛЮЧЕНИЕ:\nДанных за патологические изменения головного мозга не получено.",
+    fileSize: 31744,
+    uploadedBy: "Врач-рентгенолог",
+    createdAt: "2026-02-12T09:15:00Z",
+  },
+];
+
 const seedUsers: Array<AuthUser & { password: string }> = [
   {
     id: "u-admin",
@@ -110,6 +136,7 @@ function readDb(): MockDb {
       patients: seedPatients,
       templates: seedTemplates,
       protocols: seedProtocols,
+      uploadedTemplates: seedUploadedTemplates,
       users: seedUsers,
       refreshTokens: {},
     };
@@ -152,6 +179,67 @@ export const mockDb = {
   deleteTemplate: async (id: string): Promise<void> => {
     const db = readDb();
     db.templates = db.templates.filter((item) => item.id !== id);
+    writeDb(db);
+  },
+  listUploadedTemplates: async (): Promise<UploadedTemplate[]> => {
+    const db = readDb();
+    return db.uploadedTemplates ?? [];
+  },
+  getUploadedTemplate: async (id: string): Promise<UploadedTemplate> => {
+    const db = readDb();
+    const found = (db.uploadedTemplates ?? []).find((item) => item.id === id);
+    if (!found) {
+      throw new Error("Uploaded template not found");
+    }
+    return found;
+  },
+  getUploadedTemplatesByModality: async (modality: string): Promise<UploadedTemplate[]> => {
+    const db = readDb();
+    return (db.uploadedTemplates ?? []).filter((item) => item.modality === modality);
+  },
+  uploadTemplate: async (file: File, modality: Modality): Promise<UploadedTemplate> => {
+    await new Promise((r) => setTimeout(r, 600));
+    const db = readDb();
+    const id = token();
+    const uploaded: UploadedTemplate = {
+      id,
+      fileName: `${file.name.replace(/\.docx$/i, "")}_${id}.docx`,
+      originalName: file.name,
+      modality,
+      extractedText: `[Извлечённый текст из файла "${file.name}"]\n\nТЕХНИКА ИССЛЕДОВАНИЯ:\nИсследование выполнено по стандартному протоколу.\n\nОПИСАНИЕ:\nБез патологических изменений.\n\nЗАКЛЮЧЕНИЕ:\nНорма.`,
+      fileSize: file.size,
+      uploadedBy: "Текущий пользователь",
+      createdAt: new Date().toISOString(),
+    };
+    db.uploadedTemplates = [...(db.uploadedTemplates ?? []), uploaded];
+    writeDb(db);
+    return uploaded;
+  },
+  uploadTemplatesBatch: async (files: File[], modality: Modality): Promise<UploadedTemplate[]> => {
+    const results: UploadedTemplate[] = [];
+    for (const file of files) {
+      await new Promise((r) => setTimeout(r, 400));
+      const db = readDb();
+      const id = token();
+      const uploaded: UploadedTemplate = {
+        id,
+        fileName: `${file.name.replace(/\.docx$/i, "")}_${id}.docx`,
+        originalName: file.name,
+        modality,
+        extractedText: `[Извлечённый текст из файла "${file.name}"]\n\nТЕХНИКА ИССЛЕДОВАНИЯ:\nИсследование выполнено по стандартному протоколу.\n\nОПИСАНИЕ:\nБез патологических изменений.\n\nЗАКЛЮЧЕНИЕ:\nНорма.`,
+        fileSize: file.size,
+        uploadedBy: "Текущий пользователь",
+        createdAt: new Date().toISOString(),
+      };
+      db.uploadedTemplates = [...(db.uploadedTemplates ?? []), uploaded];
+      writeDb(db);
+      results.push(uploaded);
+    }
+    return results;
+  },
+  deleteUploadedTemplate: async (id: string): Promise<void> => {
+    const db = readDb();
+    db.uploadedTemplates = (db.uploadedTemplates ?? []).filter((item) => item.id !== id);
     writeDb(db);
   },
   listProtocols: async (): Promise<Protocol[]> => readDb().protocols,

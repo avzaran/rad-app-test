@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(find:*)",
+      "Bash(netstat:*)",
+      "Bash(wmic process:*)",
+      "Bash(grep -r AI_GATEWAY . --include=*.go)",
+      "Bash(curl:*)",
+      "Bash(docker exec:*)",
+      "Bash(node -e \":*)",
+      "Bash(printf '{\"\"\"\"messages\"\"\"\":[{\"\"\"\"role\"\"\"\":\"\"\"\"user\"\"\"\",\"\"\"\"content\"\"\"\":\"\"\"\"Скажи одним словом: работает\"\"\"\"}],\"\"\"\"temperature\"\"\"\":0.3,\"\"\"\"max_tokens\"\"\"\":20}')",
+      "Read(//tmp/**)",
+      "Bash(xxd)"
+    ]
+  }
+}

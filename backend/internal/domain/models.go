@@ -1,5 +1,7 @@
 ﻿package domain
 
+import "time"
+
 type Role string
 
 const (
@@ -49,4 +51,15 @@ type AuditEvent struct {
 	UserID    string `json:"userId"`
 	Action    string `json:"action"`
 	CreatedAt string `json:"createdAt"`
+}
+
+type UploadedTemplate struct {
+	ID            string    `json:"id"`
+	FileName      string    `json:"fileName"`
+	OriginalName  string    `json:"originalName"`
+	Modality      string    `json:"modality"`
+	ExtractedText string    `json:"extractedText"`
+	FileSize      int64     `json:"fileSize"`
+	UploadedBy    string    `json:"uploadedBy"`
+	CreatedAt     time.Time `json:"createdAt"`
 }

@@ -38,10 +38,21 @@
       - "8090:8090"
     environment:
       - PORT=8090
+      # Provider: "mock", "openai", "deepseek", or "gemini"
       - PROVIDER_MODE=${PROVIDER_MODE:-mock}
+      # OpenAI config
       - LLM_BASE_URL=${LLM_BASE_URL:-https://api.openai.com}
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o}
+      - LLM_COMPLETIONS_PATH=${LLM_COMPLETIONS_PATH:-/v1/chat/completions}
+      # DeepSeek config
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      # Gemini config
+      - GEMINI_BASE_URL=${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}
 
   postgres:
     image: postgres:17-alpine

@@ -1,4 +1,4 @@
-import { useRef, useCallback, type ChangeEvent, type ComponentProps } from "react";
+import { useRef, useState, useCallback, type ChangeEvent, type ComponentProps } from "react";
 import { Textarea } from "../ui/textarea";
 import { cn } from "../ui/utils";
 import { useAutocomplete } from "../../hooks/useAutocomplete";
@@ -12,6 +12,9 @@ type AutocompleteTextareaProps = Omit<ComponentProps<"textarea">, "onChange" | "
   autocompleteEnabled: boolean;
 };
 
+/** Shared text styles so the mirror div and textarea render identically. */
+const sharedTextClasses = "font-mono text-base leading-relaxed md:text-sm";
+
 export function AutocompleteTextarea({
   value,
   onChange,
@@ -24,32 +27,31 @@ export function AutocompleteTextarea({
 }: AutocompleteTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mirrorRef = useRef<HTMLDivElement>(null);
-  const cursorRef = useRef(value.length);
+  const [cursorPos, setCursorPos] = useState(value.length);
 
-  const trackCursor = useCallback(() => {
+  const updateCursor = useCallback(() => {
     const el = textareaRef.current;
-    if (el) {
-      cursorRef.current = el.selectionStart;
-    }
+    if (el) setCursorPos(el.selectionStart);
   }, []);
 
   const { suggestion, accept, dismiss } = useAutocomplete({
     content: value,
-    cursorPosition: cursorRef.current,
+    cursorPosition: cursorPos,
     modality,
     templateContent,
     protocolId,
     enabled: autocompleteEnabled,
   });
 
-  const textBeforeCursor = value.slice(0, cursorRef.current);
+  const textBeforeCursor = value.slice(0, cursorPos);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (suggestion) {
       if (e.key === "Tab") {
         e.preventDefault();
         const newContent = accept();
-        // Create a synthetic-like event by updating via native setter
+        const newCursorPos = cursorPos + suggestion.length;
+        // Create a synthetic change event via native setter so React picks it up
         const textarea = textareaRef.current;
         if (textarea) {
           const nativeSetter = Object.getOwnPropertyDescriptor(
@@ -58,15 +60,12 @@ export function AutocompleteTextarea({
           )?.set;
           if (nativeSetter) {
             nativeSetter.call(textarea, newContent);
-            const event = new Event("input", { bubbles: true });
-            textarea.dispatchEvent(event);
+            textarea.dispatchEvent(new Event("input", { bubbles: true }));
           }
-          // Move cursor to end of inserted suggestion
-          const newCursorPos = cursorRef.current + suggestion.length;
+          setCursorPos(newCursorPos);
           requestAnimationFrame(() => {
             textarea.selectionStart = newCursorPos;
             textarea.selectionEnd = newCursorPos;
-            cursorRef.current = newCursorPos;
           });
         }
         return;
@@ -80,7 +79,7 @@ export function AutocompleteTextarea({
   };
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    cursorRef.current = e.target.selectionStart;
+    setCursorPos(e.target.selectionStart);
     onChange(e);
   };
 
@@ -92,11 +91,15 @@ export function AutocompleteTextarea({
 
   return (
     <div className="relative">
-      {/* Mirror div — ghost text overlay */}
+      {/* Mirror div — ghost text overlay. Must match textarea styling exactly. */}
       <div
         ref={mirrorRef}
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words font-mono text-sm px-3 py-2"
+        className={cn(
+          "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words",
+          "border border-transparent rounded-md px-3 py-2",
+          sharedTextClasses,
+        )}
       >
         <span className="invisible">{textBeforeCursor}</span>
         {suggestion && (
@@ -110,10 +113,10 @@ export function AutocompleteTextarea({
         value={value}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        onSelect={trackCursor}
-        onClick={trackCursor}
+        onSelect={updateCursor}
+        onClick={updateCursor}
         onScroll={handleScroll}
-        className={cn("bg-transparent font-mono text-sm", className)}
+        className={cn("bg-transparent", sharedTextClasses, className)}
         {...props}
       />
     </div>

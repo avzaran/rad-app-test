@@ -181,7 +181,7 @@ export const api = {
     formData.append("file", file);
     formData.append("modality", modality);
 
-    const response = await http.post("/uploaded-templates/upload", formData, {
+    const response = await http.post("/templates/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return uploadedTemplateSchema.parse(response.data);

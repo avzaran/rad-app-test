@@ -1,6 +1,10 @@
 ﻿package repository
 
-import "github.com/radassist/backend/internal/domain"
+import (
+	"context"
+
+	"github.com/radassist/backend/internal/domain"
+)
 
 type UserRepository interface {
 	FindByEmail(email string) (*domain.User, error)
@@ -34,10 +38,19 @@ type AuditRepository interface {
 	Add(event domain.AuditEvent) error
 }
 
+type UploadedTemplateRepository interface {
+	ListUploadedTemplates(ctx context.Context) ([]domain.UploadedTemplate, error)
+	CreateUploadedTemplate(ctx context.Context, t domain.UploadedTemplate) error
+	DeleteUploadedTemplate(ctx context.Context, id string) error
+	GetUploadedTemplate(ctx context.Context, id string) (*domain.UploadedTemplate, error)
+	GetUploadedTemplatesByModality(ctx context.Context, modality string) ([]domain.UploadedTemplate, error)
+}
+
 type Repositories struct {
-	Users     UserRepository
-	Patients  PatientRepository
-	Templates TemplateRepository
-	Protocols ProtocolRepository
-	Audit     AuditRepository
+	Users             UserRepository
+	Patients          PatientRepository
+	Templates         TemplateRepository
+	Protocols         ProtocolRepository
+	Audit             AuditRepository
+	UploadedTemplates UploadedTemplateRepository
 }

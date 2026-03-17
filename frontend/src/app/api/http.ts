@@ -27,6 +27,13 @@ http.interceptors.request.use((request) => {
   return request;
 });
 
+const MAX_RETRIES_429 = 3;
+const RETRY_BASE_MS = 1000;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 http.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -36,8 +43,18 @@ http.interceptors.response.use(
     }
 
     const status = error.response?.status;
-    const alreadyRetried = (request as { _retry?: boolean })._retry;
+    const retryCount = (request as { _retryCount?: number })._retryCount ?? 0;
 
+    // Retry on 429 with exponential backoff
+    if (status === 429 && retryCount < MAX_RETRIES_429) {
+      (request as { _retryCount?: number })._retryCount = retryCount + 1;
+      const delay = RETRY_BASE_MS * Math.pow(2, retryCount);
+      await sleep(delay);
+      return http(request);
+    }
+
+    // Refresh token on 401
+    const alreadyRetried = (request as { _retry?: boolean })._retry;
     if (status === 401 && !alreadyRetried) {
       (request as { _retry?: boolean })._retry = true;
       const refreshed = await config.refreshAccessToken();

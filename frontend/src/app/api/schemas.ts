@@ -45,6 +45,18 @@ export const refreshResponseSchema = z.object({
   accessToken: z.string(),
 });
 
+export const uploadedTemplateSchema = z.object({
+  id: z.string(),
+  fileName: z.string(),
+  originalName: z.string(),
+  modality: z.enum(["CT", "MRI", "X_RAY"]),
+  extractedText: z.string(),
+  fileSize: z.number(),
+  uploadedBy: z.string(),
+  createdAt: z.string(),
+});
+
 export const patientsSchema = z.array(patientSchema);
 export const templatesSchema = z.array(templateSchema);
 export const protocolsSchema = z.array(protocolSchema);
+export const uploadedTemplatesSchema = z.array(uploadedTemplateSchema);

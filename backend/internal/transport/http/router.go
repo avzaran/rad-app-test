@@ -39,7 +39,7 @@ func NewRouter(cfg config.Config, authService *auth.Service, dataService *data.S
 	router.Use(middleware.RateLimit(cfg.RateLimitPerMin))
 
 	h := handlers.New(authService, dataService, cfg.StorageBaseURL, cfg.StorageBucketName, cfg.RefreshTTLHours)
-	aiH := handlers.NewAIHandler(aiService)
+	aiH := handlers.NewAIHandler(aiService, dataService)
 
 	router.GET("/healthz", h.Healthz)
 
@@ -65,6 +65,13 @@ func NewRouter(cfg config.Config, authService *auth.Service, dataService *data.S
 		protected.POST("/templates", h.CreateTemplate)
 		protected.PATCH("/templates/:id", h.PatchTemplate)
 		protected.DELETE("/templates/:id", middleware.RequireRoles(domain.RoleAdmin), h.DeleteTemplate)
+
+		protected.POST("/templates/upload", h.UploadTemplate)
+		protected.POST("/templates/upload/batch", h.UploadTemplateBatch)
+		protected.GET("/templates/uploaded", h.ListUploadedTemplates)
+		protected.GET("/templates/uploaded/:id", h.GetUploadedTemplate)
+		protected.GET("/templates/uploaded/modality/:modality", h.GetUploadedTemplatesByModality)
+		protected.DELETE("/templates/uploaded/:id", h.DeleteUploadedTemplate)
 
 		protected.GET("/protocols", h.ListProtocols)
 		protected.GET("/protocols/:id", h.GetProtocol)

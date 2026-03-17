@@ -1,12 +1,15 @@
-﻿import { useState } from "react";
-import { Plus, Search, FileStack, Trash2, Eye } from "lucide-react";
+import { useState } from "react";
+import { Plus, Search, FileStack, Trash2, Eye, Upload } from "lucide-react";
 import type { Modality } from "../types/models";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { NewTemplateDialog } from "../components/NewTemplateDialog";
 import { ViewTemplateDialog } from "../components/ViewTemplateDialog";
+import { UploadTemplateDialog } from "../components/UploadTemplateDialog";
+import { UploadedTemplatesList } from "../components/UploadedTemplatesList";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +26,7 @@ import { useAuthStore } from "../store/authStore";
 
 export function Templates() {
   const [isNewTemplateOpen, setIsNewTemplateOpen] = useState(false);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [viewingTemplate, setViewingTemplate] = useState<string | null>(null);
   const [deletingTemplate, setDeletingTemplate] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -86,79 +90,100 @@ export function Templates() {
           <h1 className="text-3xl font-semibold">Шаблоны</h1>
           <p className="mt-2 text-muted-foreground">Управление шаблонами протоколов</p>
         </div>
-        <Button onClick={() => setIsNewTemplateOpen(true)} size="lg">
-          <Plus className="mr-2 h-5 w-5" />
-          Новый шаблон
-        </Button>
-      </div>
-
-      <div className="flex gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Поиск шаблонов..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
         <div className="flex gap-2">
-          <Button variant={filterModality === "all" ? "default" : "outline"} onClick={() => setFilterModality("all")}>Все</Button>
-          <Button variant={filterModality === "CT" ? "default" : "outline"} onClick={() => setFilterModality("CT")}>КТ</Button>
-          <Button variant={filterModality === "MRI" ? "default" : "outline"} onClick={() => setFilterModality("MRI")}>МРТ</Button>
-          <Button variant={filterModality === "X_RAY" ? "default" : "outline"} onClick={() => setFilterModality("X_RAY")}>Рентген</Button>
+          <Button variant="outline" onClick={() => setIsUploadOpen(true)} size="lg">
+            <Upload className="mr-2 h-5 w-5" />
+            Загрузить шаблон
+          </Button>
+          <Button onClick={() => setIsNewTemplateOpen(true)} size="lg">
+            <Plus className="mr-2 h-5 w-5" />
+            Новый шаблон
+          </Button>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {isLoading ? (
-          <Card className="col-span-full p-6 text-sm text-muted-foreground">Загрузка шаблонов...</Card>
-        ) : null}
+      <Tabs defaultValue="templates">
+        <TabsList>
+          <TabsTrigger value="templates">Шаблоны</TabsTrigger>
+          <TabsTrigger value="uploaded">Загруженные шаблоны</TabsTrigger>
+        </TabsList>
 
-        {!isLoading && filteredTemplates.length === 0 ? (
-          <Card className="col-span-full p-12">
-            <div className="flex flex-col items-center justify-center text-center">
-              <div className="rounded-full bg-muted p-4">
-                <FileStack className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="mt-4 text-lg font-semibold">Нет шаблонов</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {searchQuery || filterModality !== "all"
-                  ? "Шаблоны не найдены. Попробуйте изменить фильтры."
-                  : "Создайте первый шаблон, нажав кнопку выше."}
-              </p>
+        <TabsContent value="templates" className="space-y-4">
+          <div className="flex gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Поиск шаблонов..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
             </div>
-          </Card>
-        ) : !isLoading ? (
-          filteredTemplates.map((template) => (
-            <Card key={template.id} className="group relative flex flex-col p-6 transition-shadow hover:shadow-md">
-              <div className="mb-3 flex items-start justify-between">
-                <Badge className={getModalityColor(template.modality)}>{getModalityLabel(template.modality)}</Badge>
-              </div>
+            <div className="flex gap-2">
+              <Button variant={filterModality === "all" ? "default" : "outline"} onClick={() => setFilterModality("all")}>Все</Button>
+              <Button variant={filterModality === "CT" ? "default" : "outline"} onClick={() => setFilterModality("CT")}>КТ</Button>
+              <Button variant={filterModality === "MRI" ? "default" : "outline"} onClick={() => setFilterModality("MRI")}>МРТ</Button>
+              <Button variant={filterModality === "X_RAY" ? "default" : "outline"} onClick={() => setFilterModality("X_RAY")}>Рентген</Button>
+            </div>
+          </div>
 
-              <h3 className="mb-2 text-lg font-semibold">{template.name}</h3>
-              <p className="mb-4 flex-1 line-clamp-3 text-sm text-muted-foreground">{template.content}</p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {isLoading ? (
+              <Card className="col-span-full p-6 text-sm text-muted-foreground">Загрузка шаблонов...</Card>
+            ) : null}
 
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setViewingTemplate(template.id)} className="flex-1">
-                  <Eye className="mr-2 h-4 w-4" />
-                  Просмотр
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDeletingTemplate(template.id)}
-                  className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </Card>
-          ))
-        ) : null}
-      </div>
+            {!isLoading && filteredTemplates.length === 0 ? (
+              <Card className="col-span-full p-12">
+                <div className="flex flex-col items-center justify-center text-center">
+                  <div className="rounded-full bg-muted p-4">
+                    <FileStack className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold">Нет шаблонов</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {searchQuery || filterModality !== "all"
+                      ? "Шаблоны не найдены. Попробуйте изменить фильтры."
+                      : "Создайте первый шаблон, нажав кнопку выше."}
+                  </p>
+                </div>
+              </Card>
+            ) : !isLoading ? (
+              filteredTemplates.map((template) => (
+                <Card key={template.id} className="group relative flex flex-col p-6 transition-shadow hover:shadow-md">
+                  <div className="mb-3 flex items-start justify-between">
+                    <Badge className={getModalityColor(template.modality)}>{getModalityLabel(template.modality)}</Badge>
+                  </div>
+
+                  <h3 className="mb-2 text-lg font-semibold">{template.name}</h3>
+                  <p className="mb-4 flex-1 line-clamp-3 text-sm text-muted-foreground">{template.content}</p>
+
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setViewingTemplate(template.id)} className="flex-1">
+                      <Eye className="mr-2 h-4 w-4" />
+                      Просмотр
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDeletingTemplate(template.id)}
+                      className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </Card>
+              ))
+            ) : null}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="uploaded">
+          <UploadedTemplatesList />
+        </TabsContent>
+      </Tabs>
 
       <NewTemplateDialog open={isNewTemplateOpen} onOpenChange={setIsNewTemplateOpen} />
+
+      <UploadTemplateDialog open={isUploadOpen} onOpenChange={setIsUploadOpen} />
 
       <ViewTemplateDialog templateId={viewingTemplate} onClose={() => setViewingTemplate(null)} />
 

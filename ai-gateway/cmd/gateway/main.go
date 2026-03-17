@@ -38,18 +38,33 @@ func main() {
 }
 
 func buildProvider(cfg config.Config, logger *zap.Logger) provider.Provider {
+	httpClient := &http.Client{Timeout: 120 * time.Second}
+
 	switch cfg.ProviderMode {
 	case "openai":
-		logger.Info("using OpenAI-compatible provider",
+		logger.Info("using OpenAI provider",
 			zap.String("base_url", cfg.LLMBaseURL),
 			zap.String("model", cfg.LLMModel),
+			zap.String("completions_path", cfg.LLMCompletionsPath),
 		)
-		return provider.NewOpenAIProvider(
-			cfg.LLMBaseURL,
-			cfg.LLMAPIKey,
-			cfg.LLMModel,
-			&http.Client{Timeout: 120 * time.Second},
+		return provider.NewOpenAIProvider(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel, httpClient).
+			WithCompletionsPath(cfg.LLMCompletionsPath)
+
+	case "deepseek":
+		logger.Info("using DeepSeek provider",
+			zap.String("base_url", cfg.DeepSeekBaseURL),
+			zap.String("model", cfg.DeepSeekModel),
 		)
+		return provider.NewOpenAIProvider(cfg.DeepSeekBaseURL, cfg.DeepSeekAPIKey, cfg.DeepSeekModel, httpClient)
+
+	case "gemini":
+		logger.Info("using Gemini provider",
+			zap.String("base_url", cfg.GeminiBaseURL),
+			zap.String("model", cfg.GeminiModel),
+		)
+		return provider.NewOpenAIProvider(cfg.GeminiBaseURL, cfg.GeminiAPIKey, cfg.GeminiModel, httpClient).
+			WithCompletionsPath("/chat/completions")
+
 	default:
 		logger.Info("using mock provider")
 		return provider.NewMockProvider()
