@@ -15,6 +15,7 @@ type UseAutocompleteReturn = {
   suggestion: string;
   status: AutocompleteStatus;
   isLoading: boolean;
+  totalTokensUsed: number;
   accept: () => string;
   dismiss: () => void;
 };
@@ -87,6 +88,7 @@ export function useAutocomplete({
   const [suggestion, setSuggestion] = useState("");
   const [status, setStatus] = useState<AutocompleteStatus>("idle");
   const [isLoading, setIsLoading] = useState(false);
+  const [totalTokensUsed, setTotalTokensUsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const requestSeqRef = useRef(0);
@@ -188,6 +190,9 @@ export function useAutocomplete({
             if (chunk.done) {
               finalized = true;
               abortRef.current = null;
+              if (chunk.tokensUsed) {
+                setTotalTokensUsed((current) => current + chunk.tokensUsed);
+              }
               if (accumulated) {
                 setCachedSuggestion(contextKey, accumulated);
                 setSuggestion(accumulated);
@@ -279,5 +284,5 @@ export function useAutocomplete({
     invalidatePendingRequest();
   }, [contextKey, invalidatePendingRequest]);
 
-  return { suggestion, status, isLoading, accept, dismiss };
+  return { suggestion, status, isLoading, totalTokensUsed, accept, dismiss };
 }

@@ -61,7 +61,7 @@ export function AutocompleteTextarea({
     pendingSelectionRef.current = null;
   }, [value]);
 
-  const { suggestion, status, accept, dismiss } = useAutocomplete({
+  const { suggestion, status, totalTokensUsed, accept, dismiss } = useAutocomplete({
     content: value,
     cursorPosition: cursorPos,
     modality,
@@ -195,6 +195,14 @@ export function AutocompleteTextarea({
         className={cn("bg-transparent", sharedTextClasses, className)}
         {...props}
       />
+
+      <div className="min-h-4 pt-1 text-left">
+        {totalTokensUsed > 0 && (
+          <div className="pointer-events-none pl-1 text-[10px] text-muted-foreground/60">
+            {totalTokensUsed} ток.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

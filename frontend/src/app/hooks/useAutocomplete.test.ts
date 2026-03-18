@@ -103,6 +103,7 @@ describe("useAutocomplete", () => {
     expect(streamAIMock).toHaveBeenCalledTimes(1);
     expect(result.current.status).toBe("ready");
     expect(result.current.suggestion).toBe(" world");
+    expect(result.current.totalTokensUsed).toBe(2);
   });
 
   it("aborts the active stream when the input changes", async () => {
@@ -295,5 +296,41 @@ describe("useAutocomplete", () => {
     await advanceDebounce();
 
     expect(streamAIMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("accumulates token usage across completed autocomplete requests", async () => {
+    streamAIMock
+      .mockImplementationOnce(async (_req, onChunk) => {
+        onChunk({ delta: " first", done: false });
+        onChunk({ delta: "", done: true, tokensUsed: 3 });
+      })
+      .mockImplementationOnce(async (_req, onChunk) => {
+        onChunk({ delta: " second", done: false });
+        onChunk({ delta: "", done: true, tokensUsed: 5 });
+      });
+
+    const { result, rerender } = renderHook((props: HookProps) => useAutocomplete(props), {
+      initialProps: makeProps({
+        protocolId: "token-counter",
+      }),
+    });
+
+    await advanceDebounce();
+    await flushMicrotasks();
+
+    expect(result.current.totalTokensUsed).toBe(3);
+
+    rerender(
+      makeProps({
+        protocolId: "token-counter",
+        content: "abcdefghijklmnop!",
+        cursorPosition: 17,
+      }),
+    );
+
+    await advanceDebounce();
+    await flushMicrotasks();
+
+    expect(result.current.totalTokensUsed).toBe(8);
   });
 });

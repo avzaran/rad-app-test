@@ -11,12 +11,14 @@ const dismissMock = vi.hoisted(() => vi.fn());
 const mockedAutocomplete = vi.hoisted(() => ({
   suggestion: "",
   status: "idle" as AutocompleteStatus,
+  totalTokensUsed: 0,
 }));
 
 vi.mock("../../hooks/useAutocomplete", () => ({
   useAutocomplete: () => ({
     suggestion: mockedAutocomplete.suggestion,
     status: mockedAutocomplete.status,
+    totalTokensUsed: mockedAutocomplete.totalTokensUsed,
     accept: acceptMock,
     dismiss: dismissMock,
   }),
@@ -48,6 +50,7 @@ describe("AutocompleteTextarea", () => {
     dismissMock.mockReset();
     mockedAutocomplete.suggestion = " world";
     mockedAutocomplete.status = "ready";
+    mockedAutocomplete.totalTokensUsed = 0;
   });
 
   it("shows a loading indicator and hides the shortcut hint while loading", () => {
@@ -73,6 +76,14 @@ describe("AutocompleteTextarea", () => {
     rerender(<Harness />);
 
     expect(screen.getByText("Tab - принять, Esc - скрыть")).toBeInTheDocument();
+  });
+
+  it("shows a subtle token counter after autocomplete has used tokens", () => {
+    mockedAutocomplete.totalTokensUsed = 24;
+
+    render(<Harness />);
+
+    expect(screen.getByText("24 ток.")).toBeInTheDocument();
   });
 
   it("dismisses the suggestion on Escape and clears the ghost text", async () => {
