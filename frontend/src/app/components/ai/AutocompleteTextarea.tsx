@@ -61,7 +61,7 @@ export function AutocompleteTextarea({
     pendingSelectionRef.current = null;
   }, [value]);
 
-  const { suggestion, accept, dismiss } = useAutocomplete({
+  const { suggestion, status, accept, dismiss } = useAutocomplete({
     content: value,
     cursorPosition: cursorPos,
     modality,
@@ -71,17 +71,19 @@ export function AutocompleteTextarea({
   });
 
   const textBeforeCursor = value.slice(0, cursorPos);
+  const showLoadingIndicator = status === "debouncing" || status === "loading";
+  const showHint = Boolean(suggestion);
 
   const handleAutocompleteKey = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (!suggestion) {
-        return false;
-      }
-
       if (e.key === "Tab") {
+        if (!suggestion) {
+          return false;
+        }
+
         e.preventDefault();
         e.stopPropagation();
-        
+
         const newContent = accept();
         const newCursorPos = cursorPos + suggestion.length;
         pendingSelectionRef.current = newCursorPos;
@@ -91,6 +93,10 @@ export function AutocompleteTextarea({
       }
 
       if (e.key === "Escape") {
+        if (!suggestion && status !== "debouncing" && status !== "loading") {
+          return false;
+        }
+
         e.preventDefault();
         e.stopPropagation();
         dismiss();
@@ -99,7 +105,7 @@ export function AutocompleteTextarea({
 
       return false;
     },
-    [accept, cursorPos, dismiss, onValueChange, suggestion],
+    [accept, cursorPos, dismiss, onValueChange, status, suggestion],
   );
 
   const handleKeyDownCapture = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -147,6 +153,21 @@ export function AutocompleteTextarea({
 
   return (
     <div className="relative">
+      {(showLoadingIndicator || showHint) && (
+        <div className="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-2 rounded-md border border-border/60 bg-background/85 px-2 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
+          {showLoadingIndicator && (
+            <div
+              role="status"
+              aria-label="Автокомплит загружается"
+              className="flex h-4 w-4 items-center justify-center"
+            >
+              <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          )}
+          {showHint && <span className="whitespace-nowrap">Tab - принять, Esc - скрыть</span>}
+        </div>
+      )}
+
       <div
         ref={mirrorRef}
         aria-hidden="true"
