@@ -152,49 +152,51 @@ export function AutocompleteTextarea({
   };
 
   return (
-    <div className="relative">
-      {(showLoadingIndicator || showHint) && (
-        <div className="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-2 rounded-md border border-border/60 bg-background/85 px-2 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
-          {showLoadingIndicator && (
-            <div
-              role="status"
-              aria-label="Автокомплит загружается"
-              className="flex h-4 w-4 items-center justify-center"
-            >
-              <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            </div>
+    <div>
+      <div className="relative overflow-hidden rounded-md">
+        {(showLoadingIndicator || showHint) && (
+          <div className="pointer-events-none absolute right-2 top-2 z-20 flex items-center gap-2 rounded-md border border-border/60 bg-background/85 px-2 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
+            {showLoadingIndicator && (
+              <div
+                role="status"
+                aria-label="Автокомплит загружается"
+                className="flex h-4 w-4 items-center justify-center"
+              >
+                <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              </div>
+            )}
+            {showHint && <span className="whitespace-nowrap">Tab - принять, Esc - скрыть</span>}
+          </div>
+        )}
+
+        <div
+          ref={mirrorRef}
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute inset-0 z-0 overflow-hidden whitespace-pre-wrap break-words",
+            "border border-transparent rounded-md px-3 py-2",
+            sharedTextClasses,
           )}
-          {showHint && <span className="whitespace-nowrap">Tab - принять, Esc - скрыть</span>}
+        >
+          <span className="invisible">{textBeforeCursor}</span>
+          {suggestion && (
+            <span className="text-muted-foreground/40 italic">{suggestion}</span>
+          )}
         </div>
-      )}
 
-      <div
-        ref={mirrorRef}
-        aria-hidden="true"
-        className={cn(
-          "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words",
-          "border border-transparent rounded-md px-3 py-2",
-          sharedTextClasses,
-        )}
-      >
-        <span className="invisible">{textBeforeCursor}</span>
-        {suggestion && (
-          <span className="text-muted-foreground/40 italic">{suggestion}</span>
-        )}
+        <Textarea
+          ref={textareaRef}
+          value={value}
+          onChange={handleChange}
+          onKeyDownCapture={handleKeyDownCapture}
+          onKeyDown={handleKeyDown}
+          onSelect={handleSelect}
+          onClick={handleClick}
+          onScroll={handleScrollEvent}
+          className={cn("relative z-10 bg-transparent field-sizing-fixed", sharedTextClasses, className)}
+          {...props}
+        />
       </div>
-
-      <Textarea
-        ref={textareaRef}
-        value={value}
-        onChange={handleChange}
-        onKeyDownCapture={handleKeyDownCapture}
-        onKeyDown={handleKeyDown}
-        onSelect={handleSelect}
-        onClick={handleClick}
-        onScroll={handleScrollEvent}
-        className={cn("bg-transparent", sharedTextClasses, className)}
-        {...props}
-      />
 
       <div className="min-h-4 pt-1 text-left">
         {totalTokensUsed > 0 && (

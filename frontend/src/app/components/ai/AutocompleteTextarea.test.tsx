@@ -58,8 +58,11 @@ describe("AutocompleteTextarea", () => {
     mockedAutocomplete.status = "loading";
 
     render(<Harness />);
+    const textarea = screen.getByLabelText("editor");
+    const wrapper = textarea.parentElement;
 
     expect(screen.getByRole("status", { name: "Автокомплит загружается" })).toBeInTheDocument();
+    expect(wrapper).toContainElement(screen.getByRole("status", { name: "Автокомплит загружается" }));
     expect(screen.queryByText("Tab - принять, Esc - скрыть")).not.toBeInTheDocument();
   });
 
@@ -75,15 +78,29 @@ describe("AutocompleteTextarea", () => {
     mockedAutocomplete.status = "ready";
     rerender(<Harness />);
 
+    const textarea = screen.getByLabelText("editor");
+    const wrapper = textarea.parentElement;
+
     expect(screen.getByText("Tab - принять, Esc - скрыть")).toBeInTheDocument();
+    expect(wrapper).toContainElement(screen.getByText("Tab - принять, Esc - скрыть"));
   });
 
-  it("shows a subtle token counter after autocomplete has used tokens", () => {
+  it("renders the protocol editor textarea with fixed field sizing", () => {
+    render(<Harness />);
+
+    expect(screen.getByLabelText("editor")).toHaveClass("field-sizing-fixed");
+  });
+
+  it("shows a subtle token counter outside the textarea wrapper", () => {
     mockedAutocomplete.totalTokensUsed = 24;
 
     render(<Harness />);
+    const textarea = screen.getByLabelText("editor");
+    const wrapper = textarea.parentElement;
+    const tokenCounter = screen.getByText("24 ток.");
 
-    expect(screen.getByText("24 ток.")).toBeInTheDocument();
+    expect(tokenCounter).toBeInTheDocument();
+    expect(wrapper).not.toContainElement(tokenCounter);
   });
 
   it("dismisses the suggestion on Escape and clears the ghost text", async () => {
