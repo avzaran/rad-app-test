@@ -7,6 +7,8 @@ export type AIGenerateRequest = {
   templateContent: string;
   section: AISection;
   currentContent: string;
+  prefixText?: string;
+  suffixText?: string;
   userMessage?: string;
   protocolId: string;
   uploadedTemplateIds?: string[];

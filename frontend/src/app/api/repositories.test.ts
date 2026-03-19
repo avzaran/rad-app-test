@@ -22,6 +22,8 @@ describe("api.streamAI", () => {
       {
         section: "autocomplete",
         currentContent: "Предыдущий текст",
+        prefixText: "Начало текущего предложения",
+        suffixText: "Конец текущего предложения.",
         modality: "CT",
         templateContent: "Шаблон",
         protocolId: "protocol-contract",
@@ -45,6 +47,8 @@ describe("api.streamAI", () => {
     expect(JSON.parse(String(request?.body))).toMatchObject({
       section: "autocomplete",
       currentContent: "Предыдущий текст",
+      prefixText: "Начало текущего предложения",
+      suffixText: "Конец текущего предложения.",
       modality: "CT",
       templateContent: "Шаблон",
       protocolId: "protocol-contract",

@@ -30,6 +30,8 @@ type GenerateRequest struct {
 	TemplateContent     string   `json:"templateContent"`
 	Section             string   `json:"section"`
 	CurrentContent      string   `json:"currentContent"`
+	PrefixText          string   `json:"prefixText"`
+	SuffixText          string   `json:"suffixText"`
 	UserMessage         string   `json:"userMessage"`
 	ProtocolID          string   `json:"protocolId"`
 	UploadedTemplateIDs []string `json:"uploadedTemplateIds,omitempty"`
@@ -175,6 +177,8 @@ func (s *Service) buildGatewayRequest(req GenerateRequest) gatewayRequest {
 	// Sanitize PII before building prompts
 	sanitizedTemplate := SanitizePII(req.TemplateContent)
 	sanitizedContent := SanitizePII(req.CurrentContent)
+	sanitizedPrefix := SanitizePII(req.PrefixText)
+	sanitizedSuffix := SanitizePII(req.SuffixText)
 	sanitizedMessage := SanitizePII(req.UserMessage)
 
 	messages := BuildMessages(PromptContext{
@@ -182,6 +186,8 @@ func (s *Service) buildGatewayRequest(req GenerateRequest) gatewayRequest {
 		Section:         req.Section,
 		TemplateContent: sanitizedTemplate,
 		CurrentContent:  sanitizedContent,
+		PrefixText:      sanitizedPrefix,
+		SuffixText:      sanitizedSuffix,
 		UserMessage:     sanitizedMessage,
 		TemplateContext: req.TemplateContext,
 	})

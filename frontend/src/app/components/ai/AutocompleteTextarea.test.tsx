@@ -10,6 +10,7 @@ const acceptMock = vi.hoisted(() => vi.fn());
 const dismissMock = vi.hoisted(() => vi.fn());
 const mockedAutocomplete = vi.hoisted(() => ({
   suggestion: "",
+  overlapText: "",
   status: "idle" as AutocompleteStatus,
   totalTokensUsed: 0,
 }));
@@ -17,6 +18,7 @@ const mockedAutocomplete = vi.hoisted(() => ({
 vi.mock("../../hooks/useAutocomplete", () => ({
   useAutocomplete: () => ({
     suggestion: mockedAutocomplete.suggestion,
+    overlapText: mockedAutocomplete.overlapText,
     status: mockedAutocomplete.status,
     totalTokensUsed: mockedAutocomplete.totalTokensUsed,
     accept: acceptMock,
@@ -24,8 +26,8 @@ vi.mock("../../hooks/useAutocomplete", () => ({
   }),
 }));
 
-function Harness() {
-  const [value, setValue] = useState("Hello");
+function Harness({ initialValue = "Hello" }: { initialValue?: string }) {
+  const [value, setValue] = useState(initialValue);
 
   return (
     <AutocompleteTextarea
@@ -49,6 +51,7 @@ describe("AutocompleteTextarea", () => {
     acceptMock.mockReset();
     dismissMock.mockReset();
     mockedAutocomplete.suggestion = " world";
+    mockedAutocomplete.overlapText = "";
     mockedAutocomplete.status = "ready";
     mockedAutocomplete.totalTokensUsed = 0;
   });
@@ -85,6 +88,39 @@ describe("AutocompleteTextarea", () => {
     expect(wrapper).toContainElement(screen.getByText("Tab - принять, Esc - скрыть"));
   });
 
+  it("renders ghost text only at the end of the line", () => {
+    render(<Harness initialValue="Hello" />);
+
+    const textarea = screen.getByLabelText("editor");
+    const wrapper = textarea.parentElement;
+    const mirror = wrapper?.querySelector('[aria-hidden="true"]');
+    const popup = screen.queryByTestId("autocomplete-popup");
+
+    expect(mirror).toHaveTextContent("world");
+    expect(popup).not.toBeInTheDocument();
+    expect(textarea).not.toHaveClass("text-transparent");
+  });
+
+  it("shows a cursor-style popup for mid-sentence suggestions", () => {
+    mockedAutocomplete.suggestion = "amazing ";
+    mockedAutocomplete.overlapText = "world";
+
+    render(<Harness initialValue="Hello world" />);
+    const textarea = screen.getByLabelText("editor") as HTMLTextAreaElement;
+
+    textarea.focus();
+    textarea.setSelectionRange(6, 6);
+    fireEvent.select(textarea);
+
+    const popup = screen.getByTestId("autocomplete-popup");
+
+    expect(popup).toBeInTheDocument();
+    expect(popup).toHaveAttribute("data-placement");
+    expect(popup).toHaveTextContent("amazing");
+    expect(popup).toHaveTextContent("world");
+    expect(screen.getByTestId("autocomplete-ghost")).toBeEmptyDOMElement();
+  });
+
   it("renders the protocol editor textarea with fixed field sizing", () => {
     render(<Harness />);
 
@@ -103,46 +139,48 @@ describe("AutocompleteTextarea", () => {
     expect(wrapper).not.toContainElement(tokenCounter);
   });
 
-  it("dismisses the suggestion on Escape and clears the ghost text", async () => {
+  it("dismisses the mid-sentence popup on Escape", async () => {
     dismissMock.mockImplementation(() => {
       mockedAutocomplete.suggestion = "";
+      mockedAutocomplete.overlapText = "";
       mockedAutocomplete.status = "idle";
     });
 
-    const { rerender } = render(<Harness />);
+    const { rerender } = render(<Harness initialValue="Hello world" />);
     const textarea = screen.getByLabelText("editor") as HTMLTextAreaElement;
     const user = userEvent.setup();
 
     textarea.focus();
-    textarea.setSelectionRange(5, 5);
+    textarea.setSelectionRange(6, 6);
     fireEvent.select(textarea);
 
     await user.keyboard("{Escape}");
-    rerender(<Harness />);
+    rerender(<Harness initialValue="Hello world" />);
     expect(dismissMock).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(" world")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("autocomplete-popup")).not.toBeInTheDocument();
   });
 
-  it("accepts inline suggestion on Tab, clears the ghost text, and keeps focus in textarea", async () => {
+  it("accepts mid-sentence popup suggestion on Tab without duplicating the suffix", async () => {
     acceptMock.mockImplementation(() => {
       mockedAutocomplete.suggestion = "";
+      mockedAutocomplete.overlapText = "";
       mockedAutocomplete.status = "idle";
-      return "Hello world";
+      return "Hello amazing world";
     });
 
-    render(<Harness />);
+    render(<Harness initialValue="Hello world" />);
     const textarea = screen.getByLabelText("editor") as HTMLTextAreaElement;
     const user = userEvent.setup();
 
     textarea.focus();
-    textarea.setSelectionRange(5, 5);
+    textarea.setSelectionRange(6, 6);
     fireEvent.select(textarea);
 
     await user.keyboard("{Tab}");
 
     expect(acceptMock).toHaveBeenCalledTimes(1);
-    expect(textarea).toHaveValue("Hello world");
+    expect(textarea).toHaveValue("Hello amazing world");
     expect(document.activeElement).toBe(textarea);
-    expect(screen.queryByText(" world")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("autocomplete-popup")).not.toBeInTheDocument();
   });
 });

@@ -63,14 +63,82 @@ describe("useAutocomplete", () => {
     expect(result.current.suggestion).toBe("");
   });
 
-  it("does not request suggestions when the cursor is mid-line", async () => {
-    const content = "abcdefghijklmnop\nsuffix";
+  it("requests suggestions between words and sends prefix/suffix context", async () => {
+    let capturedRequest: Record<string, unknown> | undefined;
+
+    streamAIMock.mockImplementation(async (req, onChunk) => {
+      capturedRequest = req as Record<string, unknown>;
+      onChunk({ delta: "mildly enlarged", done: false });
+      onChunk({ delta: "", done: true, tokensUsed: 3 });
+    });
+
+    const content = "abcdefghijklmnop liver normal size.";
     const { result } = renderHook(() =>
       useAutocomplete(
         makeProps({
-          protocolId: "mid-line",
+          protocolId: "between-words",
           content,
-          cursorPosition: 17,
+          cursorPosition: content.indexOf("normal"),
+        }),
+      ),
+    );
+
+    await advanceDebounce();
+    await flushMicrotasks();
+
+    expect(streamAIMock).toHaveBeenCalledTimes(1);
+    expect(capturedRequest).toMatchObject({
+      section: "autocomplete",
+      currentContent: "abcdefghijklmnop liver ",
+      prefixText: "abcdefghijklmnop liver ",
+      suffixText: "normal size.",
+    });
+    expect(result.current.status).toBe("ready");
+    expect(result.current.suggestion).toBe("mildly enlarged");
+    expect(result.current.overlapText).toBe("");
+  });
+
+  it("requests suggestions between existing sentences", async () => {
+    let capturedRequest: Record<string, unknown> | undefined;
+
+    streamAIMock.mockImplementation(async (req, onChunk) => {
+      capturedRequest = req as Record<string, unknown>;
+      onChunk({ delta: "Дополнение. ", done: false });
+      onChunk({ delta: "", done: true });
+    });
+
+    const content = "abcdefghijklmnop First sentence. Second sentence.";
+    const cursorPosition = content.indexOf("Second");
+
+    renderHook(() =>
+      useAutocomplete(
+        makeProps({
+          protocolId: "between-sentences",
+          content,
+          cursorPosition,
+        }),
+      ),
+    );
+
+    await advanceDebounce();
+    await flushMicrotasks();
+
+    expect(streamAIMock).toHaveBeenCalledTimes(1);
+    expect(capturedRequest).toMatchObject({
+      prefixText: "",
+      suffixText: "Second sentence.",
+    });
+  });
+
+  it("does not request suggestions when the cursor is inside a word", async () => {
+    const content = "abcdefghijklmnop middleword test.";
+    const cursorPosition = content.indexOf("middleword") + 3;
+    const { result } = renderHook(() =>
+      useAutocomplete(
+        makeProps({
+          protocolId: "inside-word",
+          content,
+          cursorPosition,
         }),
       ),
     );
@@ -103,6 +171,7 @@ describe("useAutocomplete", () => {
     expect(streamAIMock).toHaveBeenCalledTimes(1);
     expect(result.current.status).toBe("ready");
     expect(result.current.suggestion).toBe(" world");
+    expect(result.current.overlapText).toBe("");
     expect(result.current.totalTokensUsed).toBe(2);
   });
 
@@ -198,6 +267,7 @@ describe("useAutocomplete", () => {
     });
 
     expect(result.current.suggestion).toBe(" fresh");
+    expect(result.current.overlapText).toBe("");
     expect(result.current.status).toBe("ready");
   });
 
@@ -219,6 +289,7 @@ describe("useAutocomplete", () => {
     await flushMicrotasks();
 
     expect(first.result.current.suggestion).toBe(" cached");
+    expect(first.result.current.overlapText).toBe("");
     first.unmount();
     streamAIMock.mockClear();
 
@@ -227,7 +298,49 @@ describe("useAutocomplete", () => {
 
     expect(second.result.current.status).toBe("ready");
     expect(second.result.current.suggestion).toBe(" cached");
+    expect(second.result.current.overlapText).toBe("");
     expect(streamAIMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps suffix-aware contexts separate in the cache key", async () => {
+    streamAIMock.mockImplementation(async (_req, onChunk) => {
+      onChunk({ delta: " cached", done: false });
+      onChunk({ delta: "", done: true });
+    });
+
+    const sharedPrefix = "abcdefghijklmnop liver ";
+    const first = renderHook(() =>
+      useAutocomplete(
+        makeProps({
+          protocolId: "cache-suffix-aware",
+          content: `${sharedPrefix}normal size.`,
+          cursorPosition: sharedPrefix.length,
+        }),
+      ),
+    );
+
+    await advanceDebounce();
+    await flushMicrotasks();
+    expect(first.result.current.suggestion).toBe(" cached");
+    expect(first.result.current.overlapText).toBe("");
+    first.unmount();
+
+    const second = renderHook(() =>
+      useAutocomplete(
+        makeProps({
+          protocolId: "cache-suffix-aware",
+          content: `${sharedPrefix}unchanged contour.`,
+          cursorPosition: sharedPrefix.length,
+        }),
+      ),
+    );
+
+    await advanceDebounce();
+    await flushMicrotasks();
+
+    expect(streamAIMock).toHaveBeenCalledTimes(2);
+    expect(second.result.current.suggestion).toBe(" cached");
+    expect(second.result.current.overlapText).toBe("");
   });
 
   it("suppresses the same context after dismiss until the user changes the text", async () => {
@@ -332,5 +445,37 @@ describe("useAutocomplete", () => {
     await flushMicrotasks();
 
     expect(result.current.totalTokensUsed).toBe(8);
+  });
+
+  it("trims overlap with the existing right-side text before showing and accepting a suggestion", async () => {
+    streamAIMock.mockImplementation(async (_req, onChunk) => {
+      onChunk({ delta: "mildly enlarged normal size.", done: false });
+      onChunk({ delta: "", done: true, tokensUsed: 4 });
+    });
+
+    const content = "abcdefghijklmnop liver normal size.";
+    const cursorPosition = content.indexOf("normal");
+    const { result } = renderHook(() =>
+      useAutocomplete(
+        makeProps({
+          protocolId: "suffix-trim",
+          content,
+          cursorPosition,
+        }),
+      ),
+    );
+
+    await advanceDebounce();
+    await flushMicrotasks();
+
+    expect(result.current.suggestion).toBe("mildly enlarged ");
+    expect(result.current.overlapText).toBe("normal size.");
+
+    let accepted = "";
+    act(() => {
+      accepted = result.current.accept();
+    });
+
+    expect(accepted).toBe("abcdefghijklmnop liver mildly enlarged normal size.");
   });
 });

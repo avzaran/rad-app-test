@@ -17,6 +17,8 @@ type PromptContext struct {
 	Section         string // "description", "conclusion", "full", "question", "autocomplete"
 	TemplateContent string
 	CurrentContent  string
+	PrefixText      string
+	SuffixText      string
 	UserMessage     string
 	TemplateContext string // formatted reference templates context
 }
@@ -52,14 +54,16 @@ func BuildMessages(ctx PromptContext) []Message {
 	case "autocomplete":
 		directive := "ЗАДАЧА: Продолжи текст протокола с места, где остановился врач.\n\n" +
 			"ПРАВИЛА:\n" +
+			"- Продолжай текст ТОЧНО в позиции курсора, а не только в конце документа\n" +
 			"- Предложи ТОЛЬКО продолжение, НЕ повторяй уже написанный текст\n" +
+			"- Не повторяй текст, который уже стоит справа от курсора\n" +
 			"- Предложи 1-2 предложения (краткое дополнение)\n" +
 			"- Сохраняй стиль и терминологию\n" +
 			"- Не добавляй переводы строк в начале ответа\n" +
 			"- Отвечай ТОЛЬКО текстом продолжения, без пояснений"
 		messages = []Message{
 			{Role: "system", Content: systemPrompt + "\n\n" + directive},
-			{Role: "user", Content: ctx.CurrentContent},
+			{Role: "user", Content: buildAutocompletePrompt(ctx)},
 		}
 	case "question":
 		system := systemPrompt + fmt.Sprintf("\n\nТекущий протокол:\n%s", ctx.CurrentContent)
@@ -86,6 +90,35 @@ func BuildMessages(ctx PromptContext) []Message {
 	}
 
 	return messages
+}
+
+func buildAutocompletePrompt(ctx PromptContext) string {
+	var sb strings.Builder
+
+	sb.WriteString("ШИРОКИЙ ЛЕВЫЙ КОНТЕКСТ:\n")
+	if strings.TrimSpace(ctx.CurrentContent) == "" {
+		sb.WriteString("(пусто)")
+	} else {
+		sb.WriteString(ctx.CurrentContent)
+	}
+
+	sb.WriteString("\n\nТЕКСТ СЛЕВА ОТ КУРСОРА В ТЕКУЩЕМ ПРЕДЛОЖЕНИИ:\n")
+	if strings.TrimSpace(ctx.PrefixText) == "" {
+		sb.WriteString("(пусто)")
+	} else {
+		sb.WriteString(ctx.PrefixText)
+	}
+
+	sb.WriteString("\n\nТЕКСТ СПРАВА ОТ КУРСОРА В ТЕКУЩЕМ ПРЕДЛОЖЕНИИ:\n")
+	if strings.TrimSpace(ctx.SuffixText) == "" {
+		sb.WriteString("(пусто)")
+	} else {
+		sb.WriteString(ctx.SuffixText)
+	}
+
+	sb.WriteString("\n\nПродолжи текст ровно в точке курсора. Если справа уже есть готовое продолжение, не повторяй его.")
+
+	return sb.String()
 }
 
 // maxTemplateContextLen is the maximum total character length for all template context.
