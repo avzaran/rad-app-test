@@ -1,13 +1,23 @@
-﻿import type { Patient, Protocol, Template, UploadedTemplate, Modality } from "../types/models";
+﻿import type {
+  Patient,
+  Protocol,
+  Template,
+  UploadedTemplate,
+  Modality,
+  TemplateIndexJob,
+  TemplateClassificationMode,
+} from "../types/models";
 import type { AuthUser, LoginRequest, LoginResponse, RefreshResponse } from "../types/auth";
+import type { KnowledgeSearchRequest, KnowledgeSearchResponse, KnowledgeVariant } from "../types/ai";
 
-const STORAGE_KEY = "radassist-mock-db-v2";
+const STORAGE_KEY = "radassist-mock-db-v3";
 
 type MockDb = {
   patients: Patient[];
   templates: Template[];
   protocols: Protocol[];
   uploadedTemplates: UploadedTemplate[];
+  knowledgeIndexJobs: TemplateIndexJob[];
   users: Array<AuthUser & { password: string }>;
   refreshTokens: Record<string, string>;
 };
@@ -91,10 +101,16 @@ const seedUploadedTemplates: UploadedTemplate[] = [
     fileName: "ct_chest_template_ut1.docx",
     originalName: "КТ_грудной_клетки_шаблон.docx",
     modality: "CT",
+    studyProfile: "КТ органов грудной клетки",
+    tags: ["без контраста", "стандарт"],
+    classificationMode: "manual",
     extractedText:
       "ТЕХНИКА ИССЛЕДОВАНИЯ:\nКТ органов грудной клетки выполнена по стандартному протоколу.\n\nОПИСАНИЕ:\nЛегочные поля без очаговых и инфильтративных изменений. Трахея и крупные бронхи проходимы. Средостение не расширено.\n\nЗАКЛЮЧЕНИЕ:\nПатологических изменений не выявлено.",
     fileSize: 24576,
-    uploadedBy: "Администратор",
+    uploadedBy: "u-admin",
+    indexStatus: "ready",
+    lastIndexedAt: "2026-02-10T14:45:00Z",
+    lastIndexError: "",
     createdAt: "2026-02-10T14:30:00Z",
   },
   {
@@ -102,10 +118,16 @@ const seedUploadedTemplates: UploadedTemplate[] = [
     fileName: "mri_brain_template_ut2.docx",
     originalName: "МРТ_головного_мозга_стандарт.docx",
     modality: "MRI",
+    studyProfile: "МРТ головного мозга",
+    tags: ["без контраста", "стандарт"],
+    classificationMode: "manual",
     extractedText:
-      "ТЕХНИКА ИССЛЕДОВАНИЯ:\nМРТ головного мозга выполнена в стандартных режимах (Т1, Т2, FLAIR, DWI).\n\nОПИСАНИЕ:\nСтруктуры головного мозга без патологических изменений. Желудочковая система не расширена. Срединные структуры не смещены.\n\nЗАКЛЮЧЕНИЕ:\nДанных за патологические изменения головного мозга не получено.",
+      "ТЕХНИКА ИССЛЕДОВАНИЯ:\nМРТ головного мозга выполнена в стандартных режимах (Т1, Т2, FLAIR, DWI).\n\nОПИСАНИЕ:\nСтруктуры головного мозга без патологических изменений. Мозолистое тело обычной толщины и сигнальных характеристик. Желудочковая система не расширена. Срединные структуры не смещены.\n\nЗАКЛЮЧЕНИЕ:\nДанных за патологические изменения головного мозга не получено.",
     fileSize: 31744,
-    uploadedBy: "Врач-рентгенолог",
+    uploadedBy: "u-doctor",
+    indexStatus: "ready",
+    lastIndexedAt: "2026-02-12T09:30:00Z",
+    lastIndexError: "",
     createdAt: "2026-02-12T09:15:00Z",
   },
 ];
@@ -137,6 +159,7 @@ function readDb(): MockDb {
       templates: seedTemplates,
       protocols: seedProtocols,
       uploadedTemplates: seedUploadedTemplates,
+      knowledgeIndexJobs: [],
       users: seedUsers,
       refreshTokens: {},
     };
@@ -197,7 +220,13 @@ export const mockDb = {
     const db = readDb();
     return (db.uploadedTemplates ?? []).filter((item) => item.modality === modality);
   },
-  uploadTemplate: async (file: File, modality: Modality): Promise<UploadedTemplate> => {
+  uploadTemplate: async (
+    file: File,
+    modality: Modality,
+    studyProfile: string,
+    tags: string[],
+    classificationMode: TemplateClassificationMode,
+  ): Promise<UploadedTemplate> => {
     await new Promise((r) => setTimeout(r, 600));
     const db = readDb();
     const id = token();
@@ -206,16 +235,28 @@ export const mockDb = {
       fileName: `${file.name.replace(/\.docx$/i, "")}_${id}.docx`,
       originalName: file.name,
       modality,
+      studyProfile,
+      tags,
+      classificationMode,
       extractedText: `[Извлечённый текст из файла "${file.name}"]\n\nТЕХНИКА ИССЛЕДОВАНИЯ:\nИсследование выполнено по стандартному протоколу.\n\nОПИСАНИЕ:\nБез патологических изменений.\n\nЗАКЛЮЧЕНИЕ:\nНорма.`,
       fileSize: file.size,
-      uploadedBy: "Текущий пользователь",
+      uploadedBy: "u-doctor",
+      indexStatus: "pending",
+      lastIndexedAt: null,
+      lastIndexError: "",
       createdAt: new Date().toISOString(),
     };
     db.uploadedTemplates = [...(db.uploadedTemplates ?? []), uploaded];
     writeDb(db);
     return uploaded;
   },
-  uploadTemplatesBatch: async (files: File[], modality: Modality): Promise<UploadedTemplate[]> => {
+  uploadTemplatesBatch: async (
+    files: File[],
+    modality: Modality,
+    studyProfile: string,
+    tags: string[],
+    classificationMode: TemplateClassificationMode,
+  ): Promise<UploadedTemplate[]> => {
     const results: UploadedTemplate[] = [];
     for (const file of files) {
       await new Promise((r) => setTimeout(r, 400));
@@ -226,9 +267,15 @@ export const mockDb = {
         fileName: `${file.name.replace(/\.docx$/i, "")}_${id}.docx`,
         originalName: file.name,
         modality,
+        studyProfile,
+        tags,
+        classificationMode,
         extractedText: `[Извлечённый текст из файла "${file.name}"]\n\nТЕХНИКА ИССЛЕДОВАНИЯ:\nИсследование выполнено по стандартному протоколу.\n\nОПИСАНИЕ:\nБез патологических изменений.\n\nЗАКЛЮЧЕНИЕ:\nНорма.`,
         fileSize: file.size,
-        uploadedBy: "Текущий пользователь",
+        uploadedBy: "u-doctor",
+        indexStatus: "pending",
+        lastIndexedAt: null,
+        lastIndexError: "",
         createdAt: new Date().toISOString(),
       };
       db.uploadedTemplates = [...(db.uploadedTemplates ?? []), uploaded];
@@ -241,6 +288,131 @@ export const mockDb = {
     const db = readDb();
     db.uploadedTemplates = (db.uploadedTemplates ?? []).filter((item) => item.id !== id);
     writeDb(db);
+  },
+  createKnowledgeIndexJob: async ({
+    modality,
+    studyProfile,
+    sourceTemplateIds,
+  }: {
+    modality: string;
+    studyProfile: string;
+    sourceTemplateIds: string[];
+  }): Promise<TemplateIndexJob> => {
+    const db = readDb();
+    const job: TemplateIndexJob = {
+      id: token(),
+      createdBy: "u-doctor",
+      modality: modality as Modality,
+      studyProfile,
+      sourceTemplateIds,
+      status: "running",
+      totalTemplates: sourceTemplateIds.length,
+      processedTemplates: 0,
+      createdAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      lastHeartbeatAt: new Date().toISOString(),
+    };
+    db.knowledgeIndexJobs = [...(db.knowledgeIndexJobs ?? []), job];
+    db.uploadedTemplates = db.uploadedTemplates.map((item) =>
+      sourceTemplateIds.includes(item.id)
+        ? { ...item, indexStatus: "running", lastIndexError: "" }
+        : item,
+    );
+    writeDb(db);
+    return job;
+  },
+  getKnowledgeIndexJob: async (id: string): Promise<TemplateIndexJob> => {
+    const db = readDb();
+    const job = (db.knowledgeIndexJobs ?? []).find((item) => item.id === id);
+    if (!job) {
+      throw new Error("Knowledge index job not found");
+    }
+
+    if (job.status === "running") {
+      const finishedAt = new Date().toISOString();
+      const completed: TemplateIndexJob = {
+        ...job,
+        status: "completed",
+        processedTemplates: job.totalTemplates,
+        finishedAt,
+        lastHeartbeatAt: finishedAt,
+      };
+      db.knowledgeIndexJobs = db.knowledgeIndexJobs.map((item) =>
+        item.id === id ? completed : item,
+      );
+      db.uploadedTemplates = db.uploadedTemplates.map((item) =>
+        completed.sourceTemplateIds.includes(item.id)
+          ? { ...item, indexStatus: "ready", lastIndexedAt: finishedAt, lastIndexError: "" }
+          : item,
+      );
+      writeDb(db);
+      return completed;
+    }
+
+    return job;
+  },
+  searchKnowledge: async (payload: KnowledgeSearchRequest): Promise<KnowledgeSearchResponse> => {
+    const db = readDb();
+    const query = payload.query.trim().toLowerCase();
+    const selected = db.uploadedTemplates.filter((item) => {
+      if (item.modality !== payload.modality) return false;
+      if (payload.studyProfile && item.studyProfile !== payload.studyProfile) return false;
+      if (payload.sourceTemplateIds?.length && !payload.sourceTemplateIds.includes(item.id)) return false;
+      if (payload.knowledgeTags?.length && !payload.knowledgeTags.every((tag) => item.tags.includes(tag))) return false;
+      return item.indexStatus === "ready";
+    });
+
+    const variants: KnowledgeVariant[] = [];
+    for (const template of selected) {
+      const paragraphs = template.extractedText.split(/\n+/).map((item) => item.trim()).filter(Boolean);
+      for (const paragraph of paragraphs) {
+        if (query && !paragraph.toLowerCase().includes(query)) continue;
+        variants.push({
+          id: `${template.id}-${paragraph.slice(0, 12)}`,
+          category: paragraph.toLowerCase().includes("патолог") || paragraph.toLowerCase().includes("очаг") ? "pathology" : "norm",
+          text: paragraph,
+          origin: "db",
+          sources: [
+            {
+              templateId: template.id,
+              templateName: template.originalName,
+              section: paragraph.includes("ЗАКЛЮЧЕНИЕ") ? "conclusion" : "description",
+              category: paragraph.toLowerCase().includes("патолог") || paragraph.toLowerCase().includes("очаг") ? "pathology" : "norm",
+            },
+          ],
+        });
+      }
+    }
+
+    if (variants.length === 0 && query) {
+      return {
+        query: payload.query,
+        usedFallback: true,
+        variants: [
+          {
+            id: token(),
+            category: "norm",
+            text: `Мозолистое тело обычной формы, толщины и сигнальных характеристик.`,
+            origin: "ai_fallback",
+            sources: [],
+          },
+          {
+            id: token(),
+            category: "pathology",
+            text: `Мозолистое тело истончено, структура его неоднородна за счет очаговых изменений сигнала.`,
+            origin: "ai_fallback",
+            sources: [],
+          },
+        ],
+      };
+    }
+
+    return {
+      query: payload.query,
+      usedFallback: false,
+      variants: variants.slice(0, 8),
+    };
   },
   listProtocols: async (): Promise<Protocol[]> => readDb().protocols,
   getProtocol: async (id: string): Promise<Protocol | null> => {

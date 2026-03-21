@@ -17,6 +17,9 @@ type AutocompleteTextareaProps = Omit<ComponentProps<"textarea">, "onChange" | "
   value: string;
   onValueChange: (value: string) => void;
   modality: string;
+  studyProfile: string;
+  knowledgeTags: string[];
+  sourceTemplateIds: string[];
   templateContent: string;
   protocolId: string;
   autocompleteEnabled: boolean;
@@ -28,6 +31,9 @@ export function AutocompleteTextarea({
   value,
   onValueChange,
   modality,
+  studyProfile,
+  knowledgeTags,
+  sourceTemplateIds,
   templateContent,
   protocolId,
   autocompleteEnabled,
@@ -65,6 +71,9 @@ export function AutocompleteTextarea({
     content: value,
     cursorPosition: cursorPos,
     modality,
+    studyProfile,
+    knowledgeTags,
+    sourceTemplateIds,
     templateContent,
     protocolId,
     enabled: autocompleteEnabled,

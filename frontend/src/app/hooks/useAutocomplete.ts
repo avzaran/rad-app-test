@@ -6,6 +6,9 @@ type UseAutocompleteOptions = {
   content: string;
   cursorPosition: number;
   modality: string;
+  studyProfile: string;
+  knowledgeTags: string[];
+  sourceTemplateIds: string[];
   templateContent: string;
   protocolId: string;
   enabled: boolean;
@@ -26,6 +29,9 @@ export function useAutocomplete({
   content,
   cursorPosition,
   modality,
+  studyProfile,
+  knowledgeTags,
+  sourceTemplateIds,
   templateContent,
   protocolId,
   enabled,
@@ -77,6 +83,9 @@ export function useAutocomplete({
             modality: modality as Modality,
             templateContent,
             protocolId,
+            studyProfile,
+            knowledgeTags,
+            sourceTemplateIds,
           },
           (chunk) => {
             if (controller.signal.aborted) return;
@@ -109,7 +118,17 @@ export function useAutocomplete({
         timerRef.current = null;
       }
     };
-  }, [content, cursorPosition, modality, templateContent, protocolId, enabled]);
+  }, [
+    content,
+    cursorPosition,
+    modality,
+    studyProfile,
+    knowledgeTags,
+    sourceTemplateIds,
+    templateContent,
+    protocolId,
+    enabled,
+  ]);
 
   const accept = useCallback((): string => {
     if (!suggestion) return content;

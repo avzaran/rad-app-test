@@ -17,6 +17,8 @@ type Config struct {
 	StorageBucketName     string
 	AIGatewayURL          string
 	AIGatewaySharedSecret string
+	KnowledgeDatabaseURL  string
+	KnowledgeWorkerPollMS int
 	CORSAllowedOrigins    []string
 	CookieSecure          bool
 	CookieSameSite        http.SameSite
@@ -32,6 +34,8 @@ func Load() Config {
 	viper.SetDefault("STORAGE_BUCKET_NAME", "radassist-files")
 	viper.SetDefault("AI_GATEWAY_URL", "http://localhost:8090")
 	viper.SetDefault("AI_GATEWAY_SHARED_SECRET", "")
+	viper.SetDefault("KNOWLEDGE_DATABASE_URL", "")
+	viper.SetDefault("KNOWLEDGE_WORKER_POLL_MS", 1500)
 	viper.SetDefault("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 	viper.SetDefault("COOKIE_SECURE", false)
 	viper.SetDefault("COOKIE_SAMESITE", "lax")
@@ -48,6 +52,8 @@ func Load() Config {
 		StorageBucketName:     viper.GetString("STORAGE_BUCKET_NAME"),
 		AIGatewayURL:          viper.GetString("AI_GATEWAY_URL"),
 		AIGatewaySharedSecret: viper.GetString("AI_GATEWAY_SHARED_SECRET"),
+		KnowledgeDatabaseURL:  viper.GetString("KNOWLEDGE_DATABASE_URL"),
+		KnowledgeWorkerPollMS: viper.GetInt("KNOWLEDGE_WORKER_POLL_MS"),
 		CORSAllowedOrigins:    parseCSV(viper.GetString("CORS_ALLOWED_ORIGINS")),
 		CookieSecure:          viper.GetBool("COOKIE_SECURE"),
 		CookieSameSite:        parseSameSite(viper.GetString("COOKIE_SAMESITE")),

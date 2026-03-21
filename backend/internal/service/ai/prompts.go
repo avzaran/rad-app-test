@@ -13,12 +13,13 @@ var promptFS embed.FS
 
 // PromptContext holds input for building LLM messages.
 type PromptContext struct {
-	Modality        string // "CT", "MRI", "X_RAY"
-	Section         string // "description", "conclusion", "full", "question", "autocomplete"
-	TemplateContent string
-	CurrentContent  string
-	UserMessage     string
-	TemplateContext string // formatted reference templates context
+	Modality         string // "CT", "MRI", "X_RAY"
+	Section          string // "description", "conclusion", "full", "question", "autocomplete"
+	StudyProfile     string
+	TemplateContent  string
+	CurrentContent   string
+	UserMessage      string
+	KnowledgeContext string // formatted reference knowledge context
 }
 
 // Message matches the ai-gateway provider.Message format.
@@ -30,6 +31,9 @@ type Message struct {
 // BuildMessages constructs the message list for the LLM based on context.
 func BuildMessages(ctx PromptContext) []Message {
 	systemPrompt := loadSystemPrompt(ctx.Modality)
+	if strings.TrimSpace(ctx.StudyProfile) != "" {
+		systemPrompt += fmt.Sprintf("\n\nТекущий профиль исследования: %s.", ctx.StudyProfile)
+	}
 
 	var messages []Message
 
@@ -75,8 +79,8 @@ func BuildMessages(ctx PromptContext) []Message {
 	}
 
 	// Insert template context between system prompt and user prompt
-	if ctx.TemplateContext != "" {
-		templateMsg := Message{Role: "system", Content: ctx.TemplateContext}
+	if ctx.KnowledgeContext != "" {
+		templateMsg := Message{Role: "system", Content: ctx.KnowledgeContext}
 		// Insert after the first system message
 		result := make([]Message, 0, len(messages)+1)
 		result = append(result, messages[0])

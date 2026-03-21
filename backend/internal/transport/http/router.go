@@ -9,12 +9,13 @@ import (
 	"github.com/radassist/backend/internal/service/ai"
 	"github.com/radassist/backend/internal/service/auth"
 	"github.com/radassist/backend/internal/service/data"
+	"github.com/radassist/backend/internal/service/knowledge"
 	"github.com/radassist/backend/internal/transport/http/handlers"
 	"github.com/radassist/backend/internal/transport/http/middleware"
 	"go.uber.org/zap"
 )
 
-func NewRouter(cfg config.Config, authService *auth.Service, dataService *data.Service, aiService *ai.Service, logger *zap.Logger) *gin.Engine {
+func NewRouter(cfg config.Config, authService *auth.Service, dataService *data.Service, aiService *ai.Service, knowledgeService *knowledge.Service, logger *zap.Logger) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	allowedOrigins := make(map[string]struct{}, len(cfg.CORSAllowedOrigins))
@@ -50,7 +51,7 @@ func NewRouter(cfg config.Config, authService *auth.Service, dataService *data.S
 	router.Use(middleware.RateLimit(cfg.RateLimitPerMin))
 
 	h := handlers.New(authService, dataService, cfg.StorageBaseURL, cfg.StorageBucketName, cfg.RefreshTTLHours, cfg.CookieSecure, cfg.CookieSameSite)
-	aiH := handlers.NewAIHandler(aiService, dataService)
+	aiH := handlers.NewAIHandler(aiService, knowledgeService)
 
 	router.GET("/healthz", h.Healthz)
 
@@ -97,6 +98,9 @@ func NewRouter(cfg config.Config, authService *auth.Service, dataService *data.S
 		{
 			aiGroup.POST("/generate", aiH.AIGenerate)
 			aiGroup.POST("/generate/stream", aiH.AIGenerateStream)
+			aiGroup.POST("/knowledge/index-jobs", aiH.CreateIndexJob)
+			aiGroup.GET("/knowledge/index-jobs/:id", aiH.GetIndexJob)
+			aiGroup.POST("/knowledge/search", aiH.SearchKnowledge)
 		}
 	}
 

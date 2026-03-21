@@ -355,9 +355,14 @@ func (h *Handler) UploadTemplate(c *gin.Context) {
 	}
 	defer file.Close()
 
-	modality := c.PostForm("modality")
+	opts := data.UploadTemplateOptions{
+		Modality:           c.PostForm("modality"),
+		StudyProfile:       c.PostForm("studyProfile"),
+		Tags:               splitCommaSeparated(c.PostForm("tags")),
+		ClassificationMode: domain.TemplateClassificationMode(c.PostForm("classificationMode")),
+	}
 
-	result, err := h.dataService.UploadTemplate(c.Request.Context(), file, header, modality, user.ID)
+	result, err := h.dataService.UploadTemplate(c.Request.Context(), file, header, user.ID, opts)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -386,9 +391,14 @@ func (h *Handler) UploadTemplateBatch(c *gin.Context) {
 		return
 	}
 
-	modality := c.PostForm("modality")
+	opts := data.UploadTemplateOptions{
+		Modality:           c.PostForm("modality"),
+		StudyProfile:       c.PostForm("studyProfile"),
+		Tags:               splitCommaSeparated(c.PostForm("tags")),
+		ClassificationMode: domain.TemplateClassificationMode(c.PostForm("classificationMode")),
+	}
 
-	results, err := h.dataService.UploadTemplatesBatch(c.Request.Context(), files, form, modality, user.ID)
+	results, err := h.dataService.UploadTemplatesBatch(c.Request.Context(), files, form, user.ID, opts)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -399,7 +409,13 @@ func (h *Handler) UploadTemplateBatch(c *gin.Context) {
 
 // ListUploadedTemplates handles GET /templates/uploaded вЂ” list all uploaded templates.
 func (h *Handler) ListUploadedTemplates(c *gin.Context) {
-	items, err := h.dataService.ListUploadedTemplates(c.Request.Context())
+	user := middleware.CurrentUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	items, err := h.dataService.ListUploadedTemplates(c.Request.Context(), user.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -409,7 +425,13 @@ func (h *Handler) ListUploadedTemplates(c *gin.Context) {
 
 // GetUploadedTemplate handles GET /templates/uploaded/:id вЂ” get single uploaded template.
 func (h *Handler) GetUploadedTemplate(c *gin.Context) {
-	item, err := h.dataService.GetUploadedTemplate(c.Request.Context(), c.Param("id"))
+	user := middleware.CurrentUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	item, err := h.dataService.GetUploadedTemplate(c.Request.Context(), c.Param("id"), user.ID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "uploaded template not found"})
 		return
@@ -419,7 +441,13 @@ func (h *Handler) GetUploadedTemplate(c *gin.Context) {
 
 // GetUploadedTemplatesByModality handles GET /templates/uploaded/modality/:modality.
 func (h *Handler) GetUploadedTemplatesByModality(c *gin.Context) {
-	items, err := h.dataService.GetUploadedTemplatesByModality(c.Request.Context(), c.Param("modality"))
+	user := middleware.CurrentUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	items, err := h.dataService.GetUploadedTemplatesByModality(c.Request.Context(), user.ID, c.Param("modality"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -429,10 +457,28 @@ func (h *Handler) GetUploadedTemplatesByModality(c *gin.Context) {
 
 // DeleteUploadedTemplate handles DELETE /templates/uploaded/:id вЂ” delete an uploaded template.
 func (h *Handler) DeleteUploadedTemplate(c *gin.Context) {
-	if err := h.dataService.DeleteUploadedTemplate(c.Request.Context(), c.Param("id")); err != nil {
+	user := middleware.CurrentUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.dataService.DeleteUploadedTemplate(c.Request.Context(), c.Param("id"), user.ID); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+func splitCommaSeparated(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }

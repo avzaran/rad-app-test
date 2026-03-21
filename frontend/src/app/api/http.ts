@@ -6,12 +6,45 @@ type AuthConfig = {
   refreshAccessToken: () => Promise<string | null>;
 };
 
+function normalizeRequestPath(url?: string): string | null {
+  if (!url) {
+    return null;
+  }
+
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    try {
+      return new URL(url).pathname;
+    } catch {
+      return url;
+    }
+  }
+
+  return url.startsWith("/") ? url : `/${url}`;
+}
+
+export function shouldHandleUnauthorizedWithRefresh(url?: string): boolean {
+  const path = normalizeRequestPath(url);
+  if (!path) {
+    return true;
+  }
+
+  return !path.startsWith("/auth/");
+}
+
 const config: AuthConfig = {
   getAccessToken: () => null,
   refreshAccessToken: async () => null,
 };
 
 export const http = axios.create({
+  baseURL: env.apiBaseUrl,
+  withCredentials: true,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+export const authHttp = axios.create({
   baseURL: env.apiBaseUrl,
   withCredentials: true,
   headers: {
@@ -55,7 +88,7 @@ http.interceptors.response.use(
 
     // Refresh token on 401
     const alreadyRetried = (request as { _retry?: boolean })._retry;
-    if (status === 401 && !alreadyRetried) {
+    if (status === 401 && !alreadyRetried && shouldHandleUnauthorizedWithRefresh(request.url)) {
       (request as { _retry?: boolean })._retry = true;
       const refreshed = await config.refreshAccessToken();
       if (refreshed) {
@@ -77,4 +110,3 @@ export function configureHttpAuth(nextConfig: AuthConfig): void {
 export function getAccessToken(): string | null {
   return config.getAccessToken();
 }
-

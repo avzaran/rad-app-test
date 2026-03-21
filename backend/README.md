@@ -8,5 +8,4 @@
 
 Default port: `8080`.
 
-Current implementation runs on in-memory repositories with SQL migrations prepared in ./migrations.
-
+Current implementation keeps core business entities in memory for local bootstrap, while the AI knowledge subsystem can use Postgres when `KNOWLEDGE_DATABASE_URL` is set.

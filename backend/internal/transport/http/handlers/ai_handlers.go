@@ -1,61 +1,51 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/radassist/backend/internal/domain"
 	"github.com/radassist/backend/internal/service/ai"
-	"github.com/radassist/backend/internal/service/data"
+	"github.com/radassist/backend/internal/service/knowledge"
 	"github.com/radassist/backend/internal/transport/http/middleware"
 )
 
-// maxAutoTemplates is the maximum number of templates to auto-fetch by modality.
-const maxAutoTemplates = 5
-
 // AIHandler handles AI-related endpoints.
 type AIHandler struct {
-	aiService   *ai.Service
-	dataService *data.Service
+	aiService        *ai.Service
+	knowledgeService *knowledge.Service
 }
 
-func NewAIHandler(aiService *ai.Service, dataService *data.Service) *AIHandler {
+func NewAIHandler(aiService *ai.Service, knowledgeService *knowledge.Service) *AIHandler {
 	return &AIHandler{
-		aiService:   aiService,
-		dataService: dataService,
+		aiService:        aiService,
+		knowledgeService: knowledgeService,
 	}
 }
 
-// enrichWithTemplateContext fetches uploaded templates and builds template context on the request.
-// If specific template IDs are provided, those are fetched. Otherwise, templates are auto-fetched
-// by modality (up to maxAutoTemplates).
-func (h *AIHandler) enrichWithTemplateContext(c *gin.Context, req *ai.GenerateRequest) {
-	ctx := c.Request.Context()
-	var templates []domain.UploadedTemplate
-
-	if len(req.UploadedTemplateIDs) > 0 {
-		// Fetch specific templates by ID
-		for _, id := range req.UploadedTemplateIDs {
-			t, err := h.dataService.GetUploadedTemplate(ctx, id)
-			if err != nil {
-				continue // skip templates that can't be found
-			}
-			templates = append(templates, *t)
-		}
-	} else if req.Modality != "" {
-		// Auto-fetch templates by modality
-		modTemplates, err := h.dataService.GetUploadedTemplatesByModality(ctx, req.Modality)
-		if err == nil && len(modTemplates) > 0 {
-			if len(modTemplates) > maxAutoTemplates {
-				modTemplates = modTemplates[:maxAutoTemplates]
-			}
-			templates = modTemplates
-		}
+func (h *AIHandler) enrichWithKnowledgeContext(ctx *gin.Context, userID string, req *ai.GenerateRequest) (*knowledge.ContextResult, error) {
+	sourceTemplateIDs := req.SourceTemplateIDs
+	if len(sourceTemplateIDs) == 0 && len(req.UploadedTemplateIDs) > 0 {
+		sourceTemplateIDs = append(sourceTemplateIDs, req.UploadedTemplateIDs...)
 	}
 
-	if len(templates) > 0 {
-		req.TemplateContext = ai.BuildTemplateContext(templates)
+	result, err := h.knowledgeService.BuildContext(ctx.Request.Context(), userID, knowledge.ContextRequest{
+		Section:           req.Section,
+		Modality:          req.Modality,
+		StudyProfile:      req.StudyProfile,
+		Query:             req.UserMessage,
+		CurrentContent:    req.CurrentContent,
+		KnowledgeTags:     req.KnowledgeTags,
+		SourceTemplateIDs: sourceTemplateIDs,
+	})
+	if err != nil {
+		return nil, err
 	}
+
+	req.KnowledgeContext = result.KnowledgeContext
+	req.SourceTemplateIDs = sourceTemplateIDs
+	return result, nil
 }
 
 // AIGenerate handles POST /ai/generate — synchronous AI response.
@@ -72,7 +62,19 @@ func (h *AIHandler) AIGenerate(c *gin.Context) {
 		return
 	}
 
-	h.enrichWithTemplateContext(c, &req)
+	ctxResult, err := h.enrichWithKnowledgeContext(c, user.ID, &req)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Section == "autocomplete" && ctxResult != nil && ctxResult.DirectAutocomplete != "" {
+		c.JSON(http.StatusOK, ai.GenerateResponse{
+			Text:       ctxResult.DirectAutocomplete,
+			TokensUsed: 0,
+		})
+		return
+	}
 
 	resp, err := h.aiService.Generate(c.Request.Context(), user.ID, req)
 	if err != nil {
@@ -97,7 +99,11 @@ func (h *AIHandler) AIGenerateStream(c *gin.Context) {
 		return
 	}
 
-	h.enrichWithTemplateContext(c, &req)
+	ctxResult, err := h.enrichWithKnowledgeContext(c, user.ID, &req)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
 
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
@@ -110,10 +116,87 @@ func (h *AIHandler) AIGenerateStream(c *gin.Context) {
 		return
 	}
 
-	_, err := h.aiService.GenerateStream(c.Request.Context(), user.ID, req, c.Writer, flusher)
-	if err != nil {
-		// If headers already sent, we can't write JSON error — the stream already started.
-		// The error would have been sent as an SSE event by the gateway.
+	if req.Section == "autocomplete" && ctxResult != nil && ctxResult.DirectAutocomplete != "" {
+		writeSSEChunk(c.Writer, flusher, map[string]any{
+			"delta": ctxResult.DirectAutocomplete,
+			"done":  false,
+		})
+		writeSSEChunk(c.Writer, flusher, map[string]any{
+			"delta":      "",
+			"done":       true,
+			"tokensUsed": 0,
+		})
 		return
 	}
+
+	_, err = h.aiService.GenerateStream(c.Request.Context(), user.ID, req, c.Writer, flusher)
+	if err != nil {
+		return
+	}
+}
+
+func (h *AIHandler) CreateIndexJob(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var req knowledge.CreateIndexJobRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	job, err := h.knowledgeService.CreateIndexJob(c.Request.Context(), user.ID, req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, job)
+}
+
+func (h *AIHandler) GetIndexJob(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	job, err := h.knowledgeService.GetIndexJob(c.Request.Context(), user.ID, c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, job)
+}
+
+func (h *AIHandler) SearchKnowledge(c *gin.Context) {
+	user := middleware.CurrentUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var req knowledge.SearchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp, err := h.knowledgeService.Search(c.Request.Context(), user.ID, req)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func writeSSEChunk(w http.ResponseWriter, flusher http.Flusher, payload map[string]any) {
+	data, _ := json.Marshal(payload)
+	_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
+	flusher.Flush()
 }
