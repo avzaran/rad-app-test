@@ -1,4 +1,4 @@
-﻿package memory
+package memory
 
 import (
 	"context"
@@ -21,6 +21,8 @@ type store struct {
 	protocols         map[string]domain.Protocol
 	audit             []domain.AuditEvent
 	uploadedTemplates map[string]domain.UploadedTemplate
+	indexJobs         map[string]domain.TemplateIndexJob
+	knowledgeItems    map[string][]domain.TemplateKnowledgeItem
 }
 
 func NewRepositories() repository.Repositories {
@@ -56,6 +58,8 @@ func NewRepositories() repository.Repositories {
 		protocols:         map[string]domain.Protocol{},
 		audit:             []domain.AuditEvent{},
 		uploadedTemplates: map[string]domain.UploadedTemplate{},
+		indexJobs:         map[string]domain.TemplateIndexJob{},
+		knowledgeItems:    map[string][]domain.TemplateKnowledgeItem{},
 	}
 
 	for _, patient := range s.patients {
@@ -79,6 +83,7 @@ func NewRepositories() repository.Repositories {
 		Protocols:         &protocolRepo{s},
 		Audit:             &auditRepo{s},
 		UploadedTemplates: &uploadedTemplateRepo{s},
+		Knowledge:         &knowledgeRepo{s},
 	}
 }
 
@@ -93,6 +98,8 @@ type protocolRepo struct{ s *store }
 type auditRepo struct{ s *store }
 
 type uploadedTemplateRepo struct{ s *store }
+
+type knowledgeRepo struct{ s *store }
 
 func (r *userRepo) FindByEmail(email string) (*domain.User, error) {
 	r.s.mu.RLock()
@@ -334,13 +341,15 @@ func (r *auditRepo) Add(event domain.AuditEvent) error {
 
 // --- UploadedTemplate repository ---
 
-func (r *uploadedTemplateRepo) ListUploadedTemplates(_ context.Context) ([]domain.UploadedTemplate, error) {
+func (r *uploadedTemplateRepo) ListUploadedTemplates(_ context.Context, userID string) ([]domain.UploadedTemplate, error) {
 	r.s.mu.RLock()
 	defer r.s.mu.RUnlock()
 
 	items := make([]domain.UploadedTemplate, 0, len(r.s.uploadedTemplates))
 	for _, t := range r.s.uploadedTemplates {
-		items = append(items, t)
+		if t.UploadedBy == userID {
+			items = append(items, t)
+		}
 	}
 
 	sort.Slice(items, func(i, j int) bool {
@@ -358,24 +367,38 @@ func (r *uploadedTemplateRepo) CreateUploadedTemplate(_ context.Context, t domai
 	return nil
 }
 
-func (r *uploadedTemplateRepo) DeleteUploadedTemplate(_ context.Context, id string) error {
+func (r *uploadedTemplateRepo) UpdateUploadedTemplate(_ context.Context, t domain.UploadedTemplate) error {
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
 
-	if _, ok := r.s.uploadedTemplates[id]; !ok {
+	if _, ok := r.s.uploadedTemplates[t.ID]; !ok {
+		return errors.New("uploaded template not found")
+	}
+
+	r.s.uploadedTemplates[t.ID] = t
+	return nil
+}
+
+func (r *uploadedTemplateRepo) DeleteUploadedTemplate(_ context.Context, id, userID string) error {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+
+	current, ok := r.s.uploadedTemplates[id]
+	if !ok || current.UploadedBy != userID {
 		return errors.New("uploaded template not found")
 	}
 
 	delete(r.s.uploadedTemplates, id)
+	delete(r.s.knowledgeItems, id)
 	return nil
 }
 
-func (r *uploadedTemplateRepo) GetUploadedTemplate(_ context.Context, id string) (*domain.UploadedTemplate, error) {
+func (r *uploadedTemplateRepo) GetUploadedTemplate(_ context.Context, id, userID string) (*domain.UploadedTemplate, error) {
 	r.s.mu.RLock()
 	defer r.s.mu.RUnlock()
 
 	t, ok := r.s.uploadedTemplates[id]
-	if !ok {
+	if !ok || t.UploadedBy != userID {
 		return nil, errors.New("uploaded template not found")
 	}
 
@@ -383,13 +406,13 @@ func (r *uploadedTemplateRepo) GetUploadedTemplate(_ context.Context, id string)
 	return &cp, nil
 }
 
-func (r *uploadedTemplateRepo) GetUploadedTemplatesByModality(_ context.Context, modality string) ([]domain.UploadedTemplate, error) {
+func (r *uploadedTemplateRepo) GetUploadedTemplatesByModality(_ context.Context, userID, modality string) ([]domain.UploadedTemplate, error) {
 	r.s.mu.RLock()
 	defer r.s.mu.RUnlock()
 
 	var items []domain.UploadedTemplate
 	for _, t := range r.s.uploadedTemplates {
-		if strings.EqualFold(t.Modality, modality) {
+		if t.UploadedBy == userID && strings.EqualFold(t.Modality, modality) {
 			items = append(items, t)
 		}
 	}
@@ -401,4 +424,190 @@ func (r *uploadedTemplateRepo) GetUploadedTemplatesByModality(_ context.Context,
 	return items, nil
 }
 
+func (r *uploadedTemplateRepo) FindUploadedTemplates(_ context.Context, userID string, filter domain.UploadedTemplateFilter) ([]domain.UploadedTemplate, error) {
+	r.s.mu.RLock()
+	defer r.s.mu.RUnlock()
 
+	sourceIDs := make(map[string]struct{}, len(filter.SourceTemplateIDs))
+	for _, id := range filter.SourceTemplateIDs {
+		sourceIDs[id] = struct{}{}
+	}
+
+	statuses := make(map[domain.TemplateIndexStatus]struct{}, len(filter.IndexStatuses))
+	for _, status := range filter.IndexStatuses {
+		statuses[status] = struct{}{}
+	}
+
+	var items []domain.UploadedTemplate
+	for _, t := range r.s.uploadedTemplates {
+		if t.UploadedBy != userID {
+			continue
+		}
+		if filter.Modality != "" && !strings.EqualFold(t.Modality, filter.Modality) {
+			continue
+		}
+		if filter.StudyProfile != "" && !strings.EqualFold(t.StudyProfile, filter.StudyProfile) {
+			continue
+		}
+		if len(sourceIDs) > 0 {
+			if _, ok := sourceIDs[t.ID]; !ok {
+				continue
+			}
+		}
+		if len(statuses) > 0 {
+			if _, ok := statuses[t.IndexStatus]; !ok {
+				continue
+			}
+		}
+		if !containsAllTags(t.Tags, filter.Tags) {
+			continue
+		}
+		items = append(items, t)
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
+
+	return items, nil
+}
+
+func (r *knowledgeRepo) CreateIndexJob(_ context.Context, job domain.TemplateIndexJob) error {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+
+	r.s.indexJobs[job.ID] = job
+	return nil
+}
+
+func (r *knowledgeRepo) GetIndexJob(_ context.Context, jobID, userID string) (*domain.TemplateIndexJob, error) {
+	r.s.mu.RLock()
+	defer r.s.mu.RUnlock()
+
+	job, ok := r.s.indexJobs[jobID]
+	if !ok || job.CreatedBy != userID {
+		return nil, errors.New("index job not found")
+	}
+
+	copy := job
+	return &copy, nil
+}
+
+func (r *knowledgeRepo) ClaimPendingIndexJob(_ context.Context) (*domain.TemplateIndexJob, error) {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+
+	var chosen *domain.TemplateIndexJob
+	for _, job := range r.s.indexJobs {
+		if job.Status != domain.TemplateIndexJobPending {
+			continue
+		}
+		if chosen == nil || job.CreatedAt.Before(chosen.CreatedAt) {
+			cp := job
+			chosen = &cp
+		}
+	}
+	if chosen == nil {
+		return nil, nil
+	}
+
+	now := time.Now().UTC()
+	chosen.Status = domain.TemplateIndexJobRunning
+	chosen.StartedAt = &now
+	chosen.LastHeartbeatAt = &now
+	r.s.indexJobs[chosen.ID] = *chosen
+
+	copy := *chosen
+	return &copy, nil
+}
+
+func (r *knowledgeRepo) UpdateIndexJob(_ context.Context, job domain.TemplateIndexJob) error {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+
+	if _, ok := r.s.indexJobs[job.ID]; !ok {
+		return errors.New("index job not found")
+	}
+
+	r.s.indexJobs[job.ID] = job
+	return nil
+}
+
+func (r *knowledgeRepo) ReplaceTemplateKnowledge(_ context.Context, template domain.UploadedTemplate, items []domain.TemplateKnowledgeItem) error {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+
+	r.s.knowledgeItems[template.ID] = append([]domain.TemplateKnowledgeItem(nil), items...)
+	return nil
+}
+
+func (r *knowledgeRepo) SearchKnowledge(_ context.Context, params domain.KnowledgeSearchParams) ([]domain.TemplateKnowledgeItem, error) {
+	r.s.mu.RLock()
+	defer r.s.mu.RUnlock()
+
+	sourceIDs := make(map[string]struct{}, len(params.SourceTemplateIDs))
+	for _, id := range params.SourceTemplateIDs {
+		sourceIDs[id] = struct{}{}
+	}
+
+	query := strings.ToLower(strings.TrimSpace(params.Query))
+	var items []domain.TemplateKnowledgeItem
+	for _, group := range r.s.knowledgeItems {
+		for _, item := range group {
+			if item.UploadedBy != params.UserID {
+				continue
+			}
+			if params.Modality != "" && !strings.EqualFold(item.Modality, params.Modality) {
+				continue
+			}
+			if params.StudyProfile != "" && !strings.EqualFold(item.StudyProfile, params.StudyProfile) {
+				continue
+			}
+			if len(sourceIDs) > 0 {
+				if _, ok := sourceIDs[item.TemplateID]; !ok {
+					continue
+				}
+			}
+			if !containsAllTags(item.Tags, params.Tags) {
+				continue
+			}
+			if query != "" {
+				content := strings.ToLower(item.SearchText + " " + item.Content)
+				if !strings.Contains(content, query) {
+					continue
+				}
+			}
+			items = append(items, item)
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].SortOrder == items[j].SortOrder {
+			return items[i].CreatedAt.Before(items[j].CreatedAt)
+		}
+		return items[i].SortOrder < items[j].SortOrder
+	})
+	if params.Limit > 0 && len(items) > params.Limit {
+		items = items[:params.Limit]
+	}
+
+	return items, nil
+}
+
+func containsAllTags(current, required []string) bool {
+	if len(required) == 0 {
+		return true
+	}
+
+	lookup := make(map[string]struct{}, len(current))
+	for _, tag := range current {
+		lookup[strings.ToLower(strings.TrimSpace(tag))] = struct{}{}
+	}
+	for _, tag := range required {
+		if _, ok := lookup[strings.ToLower(strings.TrimSpace(tag))]; !ok {
+			return false
+		}
+	}
+
+	return true
+}

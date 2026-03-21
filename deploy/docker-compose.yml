@@ -30,6 +30,8 @@ services:
       - RATE_LIMIT_PER_MIN=300
       - AI_GATEWAY_URL=http://ai-gateway:8090
       - AI_GATEWAY_SHARED_SECRET=${AI_GATEWAY_SHARED_SECRET:-change-me-ai-gateway-secret}
+      - KNOWLEDGE_DATABASE_URL=${KNOWLEDGE_DATABASE_URL:-postgres://radassist:change-me-in-local-dev@postgres:5432/radassist?sslmode=disable}
+      - KNOWLEDGE_WORKER_POLL_MS=${KNOWLEDGE_WORKER_POLL_MS:-1500}
     depends_on:
       postgres:
         condition: service_healthy
@@ -125,4 +127,3 @@ services:
 volumes:
   postgres_data:
   minio_data:
-

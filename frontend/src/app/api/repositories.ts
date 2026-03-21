@@ -1,8 +1,8 @@
 ﻿import type { LoginRequest, LoginResponse, RefreshResponse, AuthUser } from "../types/auth";
-import type { Patient, Protocol, Template, UploadedTemplate } from "../types/models";
-import type { AIGenerateRequest, AIGenerateResponse, AIStreamChunk } from "../types/ai";
+import type { Patient, Protocol, Template, UploadedTemplate, TemplateIndexJob, TemplateClassificationMode } from "../types/models";
+import type { AIGenerateRequest, AIGenerateResponse, AIStreamChunk, KnowledgeSearchRequest, KnowledgeSearchResponse } from "../types/ai";
 import { env } from "../lib/env";
-import { http, getAccessToken } from "./http";
+import { authHttp, http, getAccessToken } from "./http";
 import {
   loginResponseSchema,
   patientSchema,
@@ -12,8 +12,10 @@ import {
   refreshResponseSchema,
   templateSchema,
   templatesSchema,
+  templateIndexJobSchema,
   uploadedTemplateSchema,
   uploadedTemplatesSchema,
+  knowledgeSearchResponseSchema,
   authUserSchema,
 } from "./schemas";
 import { mockDb } from "./mockDb";
@@ -43,6 +45,14 @@ function buildStreamHeaders(token: string | null): HeadersInit {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
+
+type UploadTemplatesPayload = {
+  files: File[];
+  modality: string;
+  studyProfile: string;
+  tags: string[];
+  classificationMode: TemplateClassificationMode;
+};
 
 async function fetchAutocompleteStreamResponse(
   req: AIGenerateRequest,
@@ -288,7 +298,7 @@ export const api = {
       return mockDb.login(payload);
     }
 
-    const response = await http.post("/auth/login", payload);
+    const response = await authHttp.post("/auth/login", payload);
     return loginResponseSchema.parse(response.data);
   },
   refresh: async (): Promise<RefreshResponse> => {
@@ -296,7 +306,7 @@ export const api = {
       return mockDb.refresh();
     }
 
-    const response = await http.post("/auth/refresh");
+    const response = await authHttp.post("/auth/refresh");
     return refreshResponseSchema.parse(response.data);
   },
   me: async (): Promise<AuthUser> => {
@@ -312,7 +322,7 @@ export const api = {
       return { ok: code.trim().length > 0 };
     }
 
-    const response = await http.post("/auth/2fa/verify", { code });
+    const response = await authHttp.post("/auth/2fa/verify", { code });
     return response.data as { ok: boolean };
   },
   logout: async (): Promise<void> => {
@@ -320,19 +330,34 @@ export const api = {
       return mockDb.logout();
     }
 
-    await http.post("/auth/logout");
+    await authHttp.post("/auth/logout");
   },
 
   // -- Uploaded Templates --
 
-  uploadTemplate: async (file: File, modality: string): Promise<UploadedTemplate> => {
+  uploadTemplate: async (
+    file: File,
+    modality: string,
+    studyProfile: string,
+    tags: string[],
+    classificationMode: TemplateClassificationMode,
+  ): Promise<UploadedTemplate> => {
     if (env.useMockApi) {
-      return mockDb.uploadTemplate(file, modality as import("../types/models").Modality);
+      return mockDb.uploadTemplate(
+        file,
+        modality as import("../types/models").Modality,
+        studyProfile,
+        tags,
+        classificationMode,
+      );
     }
 
     const formData = new FormData();
     formData.append("file", file);
     formData.append("modality", modality);
+    formData.append("studyProfile", studyProfile);
+    formData.append("tags", tags.join(","));
+    formData.append("classificationMode", classificationMode);
 
     const response = await http.post("/templates/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },
@@ -340,9 +365,21 @@ export const api = {
     return uploadedTemplateSchema.parse(response.data);
   },
 
-  uploadTemplatesBatch: async (files: File[], modality: string): Promise<UploadedTemplate[]> => {
+  uploadTemplatesBatch: async ({
+    files,
+    modality,
+    studyProfile,
+    tags,
+    classificationMode,
+  }: UploadTemplatesPayload): Promise<UploadedTemplate[]> => {
     if (env.useMockApi) {
-      return mockDb.uploadTemplatesBatch(files, modality as import("../types/models").Modality);
+      return mockDb.uploadTemplatesBatch(
+        files,
+        modality as import("../types/models").Modality,
+        studyProfile,
+        tags,
+        classificationMode,
+      );
     }
 
     const formData = new FormData();
@@ -350,6 +387,9 @@ export const api = {
       formData.append("files", file);
     }
     formData.append("modality", modality);
+    formData.append("studyProfile", studyProfile);
+    formData.append("tags", tags.join(","));
+    formData.append("classificationMode", classificationMode);
 
     const response = await http.post("/templates/upload/batch", formData, {
       headers: { "Content-Type": "multipart/form-data" },
@@ -390,6 +430,37 @@ export const api = {
 
     const response = await http.get(`/templates/uploaded/modality/${modality}`);
     return uploadedTemplatesSchema.parse(response.data);
+  },
+
+  createKnowledgeIndexJob: async (payload: {
+    modality: string;
+    studyProfile: string;
+    sourceTemplateIds: string[];
+  }): Promise<TemplateIndexJob> => {
+    if (env.useMockApi) {
+      return mockDb.createKnowledgeIndexJob(payload);
+    }
+
+    const response = await http.post("/ai/knowledge/index-jobs", payload);
+    return templateIndexJobSchema.parse(response.data);
+  },
+
+  getKnowledgeIndexJob: async (id: string): Promise<TemplateIndexJob> => {
+    if (env.useMockApi) {
+      return mockDb.getKnowledgeIndexJob(id);
+    }
+
+    const response = await http.get(`/ai/knowledge/index-jobs/${id}`);
+    return templateIndexJobSchema.parse(response.data);
+  },
+
+  searchKnowledge: async (payload: KnowledgeSearchRequest): Promise<KnowledgeSearchResponse> => {
+    if (env.useMockApi) {
+      return mockDb.searchKnowledge(payload);
+    }
+
+    const response = await http.post("/ai/knowledge/search", payload);
+    return knowledgeSearchResponseSchema.parse(response.data);
   },
 
   // -- AI --

@@ -34,8 +34,11 @@ type GenerateRequest struct {
 	SuffixText          string   `json:"suffixText"`
 	UserMessage         string   `json:"userMessage"`
 	ProtocolID          string   `json:"protocolId"`
+	StudyProfile        string   `json:"studyProfile,omitempty"`
+	KnowledgeTags       []string `json:"knowledgeTags,omitempty"`
+	SourceTemplateIDs   []string `json:"sourceTemplateIds,omitempty"`
 	UploadedTemplateIDs []string `json:"uploadedTemplateIds,omitempty"`
-	TemplateContext     string   `json:"-"` // populated by handler, not from JSON
+	KnowledgeContext    string   `json:"-"` // populated by handler, not from JSON
 }
 
 // GenerateResponse is the synchronous output to the frontend.
@@ -73,43 +76,7 @@ func NewService(gatewayURL, gatewaySharedSecret string, httpClient *http.Client,
 // Generate calls the AI Gateway synchronously and returns the full response.
 func (s *Service) Generate(ctx context.Context, userID string, req GenerateRequest) (*GenerateResponse, error) {
 	gwReq := s.buildGatewayRequest(req)
-
-	body, err := json.Marshal(gwReq)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.gatewayURL+"/v1/inference", bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	if s.gatewaySharedSecret != "" {
-		httpReq.Header.Set(gatewayAuthHeader, s.gatewaySharedSecret)
-	}
-
-	resp, err := s.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("gateway request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("gateway returned %d: %s", resp.StatusCode, string(data))
-	}
-
-	var gwResp gatewayResponse
-	if err := json.NewDecoder(resp.Body).Decode(&gwResp); err != nil {
-		return nil, fmt.Errorf("decode gateway response: %w", err)
-	}
-
-	s.logAudit(userID, req, gwResp.TokensUsed)
-
-	return &GenerateResponse{
-		Text:       gwResp.Output,
-		TokensUsed: gwResp.TokensUsed,
-	}, nil
+	return s.generateFromGateway(ctx, userID, fmt.Sprintf("ai_generate:%s:%s", req.Section, req.Modality), gwReq)
 }
 
 // GenerateStream calls the AI Gateway streaming endpoint and writes SSE chunks to the writer.
@@ -167,10 +134,18 @@ func (s *Service) GenerateStream(ctx context.Context, userID string, req Generat
 	}
 
 	if totalTokens > 0 {
-		s.logAudit(userID, req, totalTokens)
+		s.logAudit(userID, fmt.Sprintf("ai_generate:%s:%s", req.Section, req.Modality))
 	}
 
 	return totalTokens, scanner.Err()
+}
+
+func (s *Service) GenerateWithMessages(ctx context.Context, userID, auditAction string, messages []Message, temperature float64, maxTokens int) (*GenerateResponse, error) {
+	return s.generateFromGateway(ctx, userID, auditAction, gatewayRequest{
+		Messages:    messages,
+		Temperature: temperature,
+		MaxTokens:   maxTokens,
+	})
 }
 
 func (s *Service) buildGatewayRequest(req GenerateRequest) gatewayRequest {
@@ -182,14 +157,15 @@ func (s *Service) buildGatewayRequest(req GenerateRequest) gatewayRequest {
 	sanitizedMessage := SanitizePII(req.UserMessage)
 
 	messages := BuildMessages(PromptContext{
-		Modality:        req.Modality,
-		Section:         req.Section,
-		TemplateContent: sanitizedTemplate,
-		CurrentContent:  sanitizedContent,
-		PrefixText:      sanitizedPrefix,
-		SuffixText:      sanitizedSuffix,
-		UserMessage:     sanitizedMessage,
-		TemplateContext: req.TemplateContext,
+		Modality:         req.Modality,
+		Section:          req.Section,
+		StudyProfile:     req.StudyProfile,
+		TemplateContent:  sanitizedTemplate,
+		CurrentContent:   sanitizedContent,
+		PrefixText:       sanitizedPrefix,
+		SuffixText:       sanitizedSuffix,
+		UserMessage:      sanitizedMessage,
+		KnowledgeContext: req.KnowledgeContext,
 	})
 
 	return gatewayRequest{
@@ -199,12 +175,53 @@ func (s *Service) buildGatewayRequest(req GenerateRequest) gatewayRequest {
 	}
 }
 
-func (s *Service) logAudit(userID string, req GenerateRequest, tokensUsed int) {
+func (s *Service) generateFromGateway(ctx context.Context, userID, auditAction string, gwReq gatewayRequest) (*GenerateResponse, error) {
+	body, err := json.Marshal(gwReq)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.gatewayURL+"/v1/inference", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if s.gatewaySharedSecret != "" {
+		httpReq.Header.Set(gatewayAuthHeader, s.gatewaySharedSecret)
+	}
+
+	resp, err := s.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("gateway request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("gateway returned %d: %s", resp.StatusCode, string(data))
+	}
+
+	var gwResp gatewayResponse
+	if err := json.NewDecoder(resp.Body).Decode(&gwResp); err != nil {
+		return nil, fmt.Errorf("decode gateway response: %w", err)
+	}
+
+	if gwResp.TokensUsed > 0 {
+		s.logAudit(userID, auditAction)
+	}
+
+	return &GenerateResponse{
+		Text:       gwResp.Output,
+		TokensUsed: gwResp.TokensUsed,
+	}, nil
+}
+
+func (s *Service) logAudit(userID, action string) {
 	if s.audit == nil {
 		return
 	}
 	_ = s.audit.Add(domain.AuditEvent{
 		UserID: userID,
-		Action: fmt.Sprintf("ai_generate:%s:%s", req.Section, req.Modality),
+		Action: action,
 	})
 }

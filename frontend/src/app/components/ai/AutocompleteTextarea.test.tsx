@@ -35,6 +35,9 @@ function Harness({ initialValue = "Hello" }: { initialValue?: string }) {
       value={value}
       onValueChange={setValue}
       modality="CT"
+      studyProfile="КТ органов грудной клетки"
+      knowledgeTags={[]}
+      sourceTemplateIds={[]}
       templateContent="template"
       protocolId="p1"
       autocompleteEnabled

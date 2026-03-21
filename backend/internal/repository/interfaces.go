@@ -1,4 +1,4 @@
-﻿package repository
+package repository
 
 import (
 	"context"
@@ -39,11 +39,22 @@ type AuditRepository interface {
 }
 
 type UploadedTemplateRepository interface {
-	ListUploadedTemplates(ctx context.Context) ([]domain.UploadedTemplate, error)
+	ListUploadedTemplates(ctx context.Context, userID string) ([]domain.UploadedTemplate, error)
 	CreateUploadedTemplate(ctx context.Context, t domain.UploadedTemplate) error
-	DeleteUploadedTemplate(ctx context.Context, id string) error
-	GetUploadedTemplate(ctx context.Context, id string) (*domain.UploadedTemplate, error)
-	GetUploadedTemplatesByModality(ctx context.Context, modality string) ([]domain.UploadedTemplate, error)
+	UpdateUploadedTemplate(ctx context.Context, t domain.UploadedTemplate) error
+	DeleteUploadedTemplate(ctx context.Context, id, userID string) error
+	GetUploadedTemplate(ctx context.Context, id, userID string) (*domain.UploadedTemplate, error)
+	GetUploadedTemplatesByModality(ctx context.Context, userID, modality string) ([]domain.UploadedTemplate, error)
+	FindUploadedTemplates(ctx context.Context, userID string, filter domain.UploadedTemplateFilter) ([]domain.UploadedTemplate, error)
+}
+
+type KnowledgeRepository interface {
+	CreateIndexJob(ctx context.Context, job domain.TemplateIndexJob) error
+	GetIndexJob(ctx context.Context, jobID, userID string) (*domain.TemplateIndexJob, error)
+	ClaimPendingIndexJob(ctx context.Context) (*domain.TemplateIndexJob, error)
+	UpdateIndexJob(ctx context.Context, job domain.TemplateIndexJob) error
+	ReplaceTemplateKnowledge(ctx context.Context, template domain.UploadedTemplate, items []domain.TemplateKnowledgeItem) error
+	SearchKnowledge(ctx context.Context, params domain.KnowledgeSearchParams) ([]domain.TemplateKnowledgeItem, error)
 }
 
 type Repositories struct {
@@ -53,4 +64,5 @@ type Repositories struct {
 	Protocols         ProtocolRepository
 	Audit             AuditRepository
 	UploadedTemplates UploadedTemplateRepository
+	Knowledge         KnowledgeRepository
 }

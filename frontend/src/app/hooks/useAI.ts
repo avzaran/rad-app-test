@@ -1,12 +1,24 @@
 import { useState, useRef, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../api/repositories";
-import type { AIGenerateRequest, AIGenerateResponse, AIStreamChunk } from "../types/ai";
+import type {
+  AIGenerateRequest,
+  AIGenerateResponse,
+  AIStreamChunk,
+  KnowledgeSearchRequest,
+  KnowledgeSearchResponse,
+} from "../types/ai";
 
 /** React Query mutation for synchronous AI generation. */
 export function useAIGenerate() {
   return useMutation<AIGenerateResponse, Error, AIGenerateRequest>({
     mutationFn: (req) => api.generateAI(req),
+  });
+}
+
+export function useKnowledgeSearch() {
+  return useMutation<KnowledgeSearchResponse, Error, KnowledgeSearchRequest>({
+    mutationFn: (req) => api.searchKnowledge(req),
   });
 }
 

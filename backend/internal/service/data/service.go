@@ -1,4 +1,4 @@
-﻿package data
+package data
 
 import (
 	"context"
@@ -15,6 +15,13 @@ import (
 )
 
 const maxDocxFileSize = 10 << 20 // 10 MB
+
+type UploadTemplateOptions struct {
+	Modality           string
+	StudyProfile       string
+	Tags               []string
+	ClassificationMode domain.TemplateClassificationMode
+}
 
 type Service struct {
 	patients          repository.PatientRepository
@@ -88,7 +95,7 @@ func (s *Service) DeleteProtocol(id string) error {
 
 // --- Uploaded template methods ---
 
-func (s *Service) UploadTemplate(ctx context.Context, file multipart.File, header *multipart.FileHeader, modality, userID string) (*domain.UploadedTemplate, error) {
+func (s *Service) UploadTemplate(ctx context.Context, file multipart.File, header *multipart.FileHeader, userID string, opts UploadTemplateOptions) (*domain.UploadedTemplate, error) {
 	if err := validateDocx(header); err != nil {
 		return nil, err
 	}
@@ -99,14 +106,18 @@ func (s *Service) UploadTemplate(ctx context.Context, file multipart.File, heade
 	}
 
 	t := domain.UploadedTemplate{
-		ID:            uuid.NewString(),
-		FileName:      uuid.NewString() + ".docx",
-		OriginalName:  header.Filename,
-		Modality:      modality,
-		ExtractedText: extractedText,
-		FileSize:      header.Size,
-		UploadedBy:    userID,
-		CreatedAt:     time.Now().UTC(),
+		ID:                 uuid.NewString(),
+		FileName:           uuid.NewString() + ".docx",
+		OriginalName:       header.Filename,
+		Modality:           opts.Modality,
+		StudyProfile:       normalizeStudyProfile(opts.StudyProfile, opts.Modality),
+		Tags:               normalizeTags(opts.Tags),
+		ClassificationMode: normalizeClassificationMode(opts.ClassificationMode),
+		ExtractedText:      extractedText,
+		FileSize:           header.Size,
+		UploadedBy:         userID,
+		IndexStatus:        domain.TemplateIndexStatusPending,
+		CreatedAt:          time.Now().UTC(),
 	}
 
 	if err := s.uploadedTemplates.CreateUploadedTemplate(ctx, t); err != nil {
@@ -116,7 +127,7 @@ func (s *Service) UploadTemplate(ctx context.Context, file multipart.File, heade
 	return &t, nil
 }
 
-func (s *Service) UploadTemplatesBatch(ctx context.Context, files []*multipart.FileHeader, form *multipart.Form, modality, userID string) ([]domain.UploadedTemplate, error) {
+func (s *Service) UploadTemplatesBatch(ctx context.Context, files []*multipart.FileHeader, form *multipart.Form, userID string, opts UploadTemplateOptions) ([]domain.UploadedTemplate, error) {
 	var results []domain.UploadedTemplate
 
 	for _, header := range files {
@@ -136,14 +147,18 @@ func (s *Service) UploadTemplatesBatch(ctx context.Context, files []*multipart.F
 		}
 
 		t := domain.UploadedTemplate{
-			ID:            uuid.NewString(),
-			FileName:      uuid.NewString() + ".docx",
-			OriginalName:  header.Filename,
-			Modality:      modality,
-			ExtractedText: extractedText,
-			FileSize:      header.Size,
-			UploadedBy:    userID,
-			CreatedAt:     time.Now().UTC(),
+			ID:                 uuid.NewString(),
+			FileName:           uuid.NewString() + ".docx",
+			OriginalName:       header.Filename,
+			Modality:           opts.Modality,
+			StudyProfile:       normalizeStudyProfile(opts.StudyProfile, opts.Modality),
+			Tags:               normalizeTags(opts.Tags),
+			ClassificationMode: normalizeClassificationMode(opts.ClassificationMode),
+			ExtractedText:      extractedText,
+			FileSize:           header.Size,
+			UploadedBy:         userID,
+			IndexStatus:        domain.TemplateIndexStatusPending,
+			CreatedAt:          time.Now().UTC(),
 		}
 
 		if err := s.uploadedTemplates.CreateUploadedTemplate(ctx, t); err != nil {
@@ -156,20 +171,20 @@ func (s *Service) UploadTemplatesBatch(ctx context.Context, files []*multipart.F
 	return results, nil
 }
 
-func (s *Service) ListUploadedTemplates(ctx context.Context) ([]domain.UploadedTemplate, error) {
-	return s.uploadedTemplates.ListUploadedTemplates(ctx)
+func (s *Service) ListUploadedTemplates(ctx context.Context, userID string) ([]domain.UploadedTemplate, error) {
+	return s.uploadedTemplates.ListUploadedTemplates(ctx, userID)
 }
 
-func (s *Service) DeleteUploadedTemplate(ctx context.Context, id string) error {
-	return s.uploadedTemplates.DeleteUploadedTemplate(ctx, id)
+func (s *Service) DeleteUploadedTemplate(ctx context.Context, id, userID string) error {
+	return s.uploadedTemplates.DeleteUploadedTemplate(ctx, id, userID)
 }
 
-func (s *Service) GetUploadedTemplate(ctx context.Context, id string) (*domain.UploadedTemplate, error) {
-	return s.uploadedTemplates.GetUploadedTemplate(ctx, id)
+func (s *Service) GetUploadedTemplate(ctx context.Context, id, userID string) (*domain.UploadedTemplate, error) {
+	return s.uploadedTemplates.GetUploadedTemplate(ctx, id, userID)
 }
 
-func (s *Service) GetUploadedTemplatesByModality(ctx context.Context, modality string) ([]domain.UploadedTemplate, error) {
-	return s.uploadedTemplates.GetUploadedTemplatesByModality(ctx, modality)
+func (s *Service) GetUploadedTemplatesByModality(ctx context.Context, userID, modality string) ([]domain.UploadedTemplate, error) {
+	return s.uploadedTemplates.GetUploadedTemplatesByModality(ctx, userID, modality)
 }
 
 // validateDocx checks that the file has a .docx extension and is within the size limit.
@@ -184,4 +199,46 @@ func validateDocx(header *multipart.FileHeader) error {
 	}
 
 	return nil
+}
+
+func normalizeStudyProfile(profile, modality string) string {
+	profile = strings.TrimSpace(profile)
+	if profile != "" {
+		return profile
+	}
+	switch strings.ToUpper(strings.TrimSpace(modality)) {
+	case "CT":
+		return "КТ"
+	case "MRI":
+		return "МРТ"
+	case "X_RAY":
+		return "Рентген"
+	default:
+		return "Общий профиль"
+	}
+}
+
+func normalizeTags(tags []string) []string {
+	seen := map[string]struct{}{}
+	var result []string
+	for _, tag := range tags {
+		normalized := strings.TrimSpace(tag)
+		if normalized == "" {
+			continue
+		}
+		key := strings.ToLower(normalized)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, normalized)
+	}
+	return result
+}
+
+func normalizeClassificationMode(mode domain.TemplateClassificationMode) domain.TemplateClassificationMode {
+	if mode == domain.TemplateClassificationAI {
+		return mode
+	}
+	return domain.TemplateClassificationManual
 }

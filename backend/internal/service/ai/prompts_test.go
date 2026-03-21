@@ -55,3 +55,25 @@ func TestBuildMessagesForAutocompleteAllowsEmptySuffix(t *testing.T) {
 		t.Fatalf("expected prefix text to remain available for end-of-document autocomplete, got %q", messages[1].Content)
 	}
 }
+
+func TestBuildMessagesIncludesStudyProfileAndKnowledgeContext(t *testing.T) {
+	messages := BuildMessages(PromptContext{
+		Modality:         "CT",
+		Section:          "description",
+		StudyProfile:     "КТ органов грудной клетки",
+		TemplateContent:  "Шаблон",
+		KnowledgeContext: "Справочный контекст",
+	})
+
+	if len(messages) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(messages))
+	}
+
+	if !strings.Contains(messages[0].Content, "Текущий профиль исследования: КТ органов грудной клетки.") {
+		t.Fatalf("expected system prompt to include study profile, got %q", messages[0].Content)
+	}
+
+	if messages[1].Content != "Справочный контекст" {
+		t.Fatalf("expected knowledge context to be inserted as second message, got %q", messages[1].Content)
+	}
+}

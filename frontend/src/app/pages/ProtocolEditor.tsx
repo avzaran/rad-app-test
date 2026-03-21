@@ -22,11 +22,17 @@ export function ProtocolEditor() {
   const [content, setContent] = useState("");
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [templateHintDismissed, setTemplateHintDismissed] = useState(false);
+  const [knowledgeStudyProfile, setKnowledgeStudyProfile] = useState("");
+  const [knowledgeTags, setKnowledgeTags] = useState<string[]>([]);
+  const [knowledgeTemplateIds, setKnowledgeTemplateIds] = useState<string[]>([]);
   const templateHintShownRef = useRef(false);
 
   useEffect(() => {
     if (protocol) {
       setContent(protocol.content);
+      setKnowledgeStudyProfile(protocol.template?.name ?? "");
+      setKnowledgeTags([]);
+      setKnowledgeTemplateIds([]);
       openProtocol({
         id: protocol.id,
         patient: protocol.patient,
@@ -149,6 +155,9 @@ export function ProtocolEditor() {
             onValueChange={setContent}
             rows={20}
             modality={protocol.modality}
+            studyProfile={knowledgeStudyProfile}
+            knowledgeTags={knowledgeTags}
+            sourceTemplateIds={knowledgeTemplateIds}
             templateContent={protocol.template?.content ?? ""}
             protocolId={protocol.id}
             autocompleteEnabled={env.aiEnabled && !aiPanelOpen}
@@ -161,6 +170,12 @@ export function ProtocolEditor() {
         <AIAssistantPanel
           protocolId={protocol.id}
           modality={protocol.modality}
+          studyProfile={knowledgeStudyProfile}
+          knowledgeTags={knowledgeTags}
+          sourceTemplateIds={knowledgeTemplateIds}
+          onStudyProfileChange={setKnowledgeStudyProfile}
+          onKnowledgeTagsChange={setKnowledgeTags}
+          onSourceTemplateIdsChange={setKnowledgeTemplateIds}
           templateContent={protocol.template?.content ?? ""}
           currentContent={content}
           onInsertFull={handleInsertFull}

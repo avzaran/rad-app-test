@@ -18,6 +18,9 @@ function makeProps(overrides: Partial<HookProps> = {}): HookProps {
     content,
     cursorPosition: overrides.cursorPosition ?? content.length,
     modality: overrides.modality ?? "CT",
+    studyProfile: overrides.studyProfile ?? "КТ органов грудной клетки",
+    knowledgeTags: overrides.knowledgeTags ?? [],
+    sourceTemplateIds: overrides.sourceTemplateIds ?? [],
     templateContent: overrides.templateContent ?? "template",
     protocolId: overrides.protocolId ?? "protocol-default",
     enabled: overrides.enabled ?? true,
@@ -92,6 +95,9 @@ describe("useAutocomplete", () => {
       currentContent: "abcdefghijklmnop liver ",
       prefixText: "abcdefghijklmnop liver ",
       suffixText: "normal size.",
+      studyProfile: "КТ органов грудной клетки",
+      knowledgeTags: [],
+      sourceTemplateIds: [],
     });
     expect(result.current.status).toBe("ready");
     expect(result.current.suggestion).toBe("mildly enlarged");

@@ -8,9 +8,10 @@ import {
 } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
+import { Input } from "./ui/input";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { Progress } from "./ui/progress";
-import type { Modality } from "../types/models";
+import type { Modality, TemplateClassificationMode } from "../types/models";
 import { toast } from "sonner";
 import { Upload, X, FileText, CheckCircle2, AlertCircle } from "lucide-react";
 import { useUploadTemplateBatchMutation } from "../hooks/useUploadedTemplates";
@@ -28,6 +29,10 @@ function formatFileSize(bytes: number): string {
 
 export function UploadTemplateDialog({ open, onOpenChange }: UploadTemplateDialogProps) {
   const [modality, setModality] = useState<Modality | null>(null);
+  const [studyProfile, setStudyProfile] = useState("");
+  const [tagsText, setTagsText] = useState("");
+  const [classificationMode, setClassificationMode] =
+    useState<TemplateClassificationMode>("manual");
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
@@ -37,6 +42,9 @@ export function UploadTemplateDialog({ open, onOpenChange }: UploadTemplateDialo
 
   const handleReset = () => {
     setModality(null);
+    setStudyProfile("");
+    setTagsText("");
+    setClassificationMode("manual");
     setFiles([]);
     setUploadStatus("idle");
   };
@@ -104,6 +112,10 @@ export function UploadTemplateDialog({ open, onOpenChange }: UploadTemplateDialo
       toast.error("Выберите модальность");
       return;
     }
+    if (!studyProfile.trim()) {
+      toast.error("Укажите профиль исследования");
+      return;
+    }
     if (files.length === 0) {
       toast.error("Выберите файлы для загрузки");
       return;
@@ -112,7 +124,16 @@ export function UploadTemplateDialog({ open, onOpenChange }: UploadTemplateDialo
     setUploadStatus("uploading");
 
     try {
-      await uploadBatch.mutateAsync({ files, modality });
+      await uploadBatch.mutateAsync({
+        files,
+        modality,
+        studyProfile: studyProfile.trim(),
+        tags: tagsText
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        classificationMode,
+      });
       setUploadStatus("success");
       toast.success(
         files.length === 1
@@ -128,7 +149,8 @@ export function UploadTemplateDialog({ open, onOpenChange }: UploadTemplateDialo
     }
   };
 
-  const canUpload = modality !== null && files.length > 0 && uploadStatus === "idle";
+  const canUpload =
+    modality !== null && studyProfile.trim().length > 0 && files.length > 0 && uploadStatus === "idle";
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -160,6 +182,58 @@ export function UploadTemplateDialog({ open, onOpenChange }: UploadTemplateDialo
                   <RadioGroupItem value="X_RAY" id="upload-xray" />
                   <Label htmlFor="upload-xray">Рентген</Label>
                 </div>
+              </div>
+            </RadioGroup>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="study-profile">Профиль исследования</Label>
+            <Input
+              id="study-profile"
+              value={studyProfile}
+              onChange={(e) => setStudyProfile(e.target.value)}
+              placeholder="Например, МРТ головного мозга"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="upload-tags">Теги</Label>
+            <Input
+              id="upload-tags"
+              value={tagsText}
+              onChange={(e) => setTagsText(e.target.value)}
+              placeholder="с контрастом, ангиография, контроль"
+            />
+            <p className="text-xs text-muted-foreground">
+              Необязательно. Перечисляйте через запятую.
+            </p>
+          </div>
+
+          <div>
+            <Label>Режим классификации</Label>
+            <RadioGroup
+              value={classificationMode}
+              onValueChange={(value) => setClassificationMode(value as TemplateClassificationMode)}
+            >
+              <div className="space-y-2">
+                <label className="flex items-start space-x-2 rounded-md border p-3">
+                  <RadioGroupItem value="manual" id="classification-manual" className="mt-1" />
+                  <div>
+                    <Label htmlFor="classification-manual">Врач задаёт вручную</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Вы используете указанный профиль и теги для всей пачки файлов.
+                    </p>
+                  </div>
+                </label>
+                <label className="flex items-start space-x-2 rounded-md border p-3">
+                  <RadioGroupItem value="ai" id="classification-ai" className="mt-1" />
+                  <div>
+                    <Label htmlFor="classification-ai">Делегировать ИИ</Label>
+                    <p className="text-xs text-muted-foreground">
+                      ИИ дополнительно разберёт содержимое и поможет отсортировать шаблоны при индексации.
+                    </p>
+                  </div>
+                </label>
               </div>
             </RadioGroup>
           </div>

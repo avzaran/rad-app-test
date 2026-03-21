@@ -14,6 +14,7 @@ import (
 	"github.com/radassist/backend/internal/service/ai"
 	"github.com/radassist/backend/internal/service/auth"
 	"github.com/radassist/backend/internal/service/data"
+	"github.com/radassist/backend/internal/service/knowledge"
 	"go.uber.org/zap"
 	gohttp "net/http"
 )
@@ -39,9 +40,10 @@ func testRouter() http.Handler {
 	authService := auth.NewService(repos, cfg.JWTSecret, 15*time.Minute, 48*time.Hour)
 	dataService := data.NewService(repos)
 	aiService := ai.NewService(cfg.AIGatewayURL, "", &http.Client{Timeout: time.Second}, repos.Audit)
+	knowledgeService := knowledge.NewService(repos.UploadedTemplates, repos.Knowledge, aiService, zap.NewNop(), 0)
 
 	logger := zap.NewNop()
-	return NewRouter(cfg, authService, dataService, aiService, logger)
+	return NewRouter(cfg, authService, dataService, aiService, knowledgeService, logger)
 }
 
 func TestHealthz(t *testing.T) {

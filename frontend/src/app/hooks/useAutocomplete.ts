@@ -6,6 +6,9 @@ type UseAutocompleteOptions = {
   content: string;
   cursorPosition: number;
   modality: string;
+  studyProfile: string;
+  knowledgeTags: string[];
+  sourceTemplateIds: string[];
   templateContent: string;
   protocolId: string;
   enabled: boolean;
@@ -46,12 +49,25 @@ type CursorContext = {
 function buildCacheKey(
   protocolId: string,
   modality: string,
+  studyProfile: string,
+  knowledgeTags: string[],
+  sourceTemplateIds: string[],
   templateContent: string,
   contextText: string,
   prefixText: string,
   suffixText: string,
 ): string {
-  return [protocolId, modality, templateContent, contextText, prefixText, suffixText].join("\u0001");
+  return [
+    protocolId,
+    modality,
+    studyProfile,
+    knowledgeTags.join(","),
+    sourceTemplateIds.join(","),
+    templateContent,
+    contextText,
+    prefixText,
+    suffixText,
+  ].join("\u0001");
 }
 
 type SuggestionPreview = {
@@ -176,6 +192,9 @@ export function useAutocomplete({
   content,
   cursorPosition,
   modality,
+  studyProfile,
+  knowledgeTags,
+  sourceTemplateIds,
   templateContent,
   protocolId,
   enabled,
@@ -193,7 +212,17 @@ export function useAutocomplete({
 
   const textBeforeCursor = content.slice(0, cursorPosition);
   const { contextText, prefixText, suffixText } = extractCursorContext(content, cursorPosition);
-  const contextKey = buildCacheKey(protocolId, modality, templateContent, contextText, prefixText, suffixText);
+  const contextKey = buildCacheKey(
+    protocolId,
+    modality,
+    studyProfile,
+    knowledgeTags,
+    sourceTemplateIds,
+    templateContent,
+    contextText,
+    prefixText,
+    suffixText,
+  );
 
   const invalidatePendingRequest = useCallback(() => {
     if (timerRef.current) {
@@ -271,6 +300,9 @@ export function useAutocomplete({
             modality: modality as Modality,
             templateContent,
             protocolId,
+            studyProfile,
+            knowledgeTags,
+            sourceTemplateIds,
           },
           (chunk) => {
             if (controller.signal.aborted || requestSeqRef.current !== requestId) {
@@ -372,8 +404,11 @@ export function useAutocomplete({
     invalidatePendingRequest,
     modality,
     protocolId,
+    sourceTemplateIds,
+    studyProfile,
     templateContent,
     textBeforeCursor.length,
+    knowledgeTags,
   ]);
 
   const accept = useCallback((): string => {
